@@ -1,0 +1,153 @@
+---
+title: "GWAS table prep"
+output: html_notebook
+---
+
+Loading libraries, set directory links, input your specific LDlink token.
+```{r}
+library(tidyverse)
+library(LDlinkR)
+library(data.table)
+
+#this is needed for API access to LDlink, obtain the token by registering at https://ldlink.nci.nih.gov/?tab=apiaccess
+ldlink_token <- ""
+
+#the directory where LDproxy will output SNP correlation files 
+LDout_dir <- "/home/rstudio/data"
+
+
+```
+
+
+Load tables from GWAS catalog, fix column names (no spaces), keep only relevant columns.
+```{r}
+#setwd(gwas_cat_dir)
+gwas_table <- read_tsv(file = "gwas_catalog_v1.0.2-associations_e104_r2021-07-08.tsv")
+ancestries_table <- read_tsv(file = "gwas-catalog-v1.0.3-ancestries-r2021-07-08.tsv")
+names(gwas_table)<-make.names(names(gwas_table),unique = TRUE)
+names(ancestries_table)<-make.names(names(ancestries_table),unique = TRUE)
+
+colnames(gwas_table)
+gwas_table_filtered <- select(gwas_table, STUDY, STUDY.ACCESSION, DISEASE.TRAIT, REGION, CHR_ID, CHR_POS, REPORTED.GENE.S., MAPPED_GENE, SNP_GENE_IDS, STRONGEST.SNP.RISK.ALLELE, SNPS, P.VALUE, MAPPED_TRAIT)
+
+```
+
+
+Prepare GWAS table to include only studies on european ancestry participants.
+```{r}
+colnames(ancestries_table)
+ancestries_european <- filter(ancestries_table, BROAD.ANCESTRAL.CATEGORY == 'European')
+vec_european <- pull(ancestries_european, STUDY.ACCESSION)
+
+associations_european <- filter(gwas_table_filtered, STUDY.ACCESSION %in% vec_european)
+```
+
+Prepare list of SNPs for LDproxy
+```{r}
+setwd(LDout_dir)
+
+#select only relevant info, keep only unique SNPs, drop all SNPs where chromosome data is missing
+snp_list_all <- associations_european %>% select(SNPS, CHR_ID) %>%
+  distinct(SNPS, .keep_all = TRUE)
+
+#extract SNPs that show up in cells as multiples (many SNPs in same cell separated with ";")
+snp_list_multi <- filter(snp_list_all, grepl(";", SNPS))
+#extract SNPs with no chromosome ID
+snp_list_na <- filter(snp_list_all, is.na(CHR_ID))
+#extract non-standard/erroneus SNP entries (that don't start with rs)
+snp_list_erroneus <- filter(snp_list_all, !grepl("rs*", SNPS))
+
+
+#drop SNPs with no chromosome ID  
+snp_list <- drop_na(snp_list_all) 
+
+#remove CHR_ID entries that are like: 1 x 11, etc. also apply filtering similar to extraction steps above
+snp_list <- filter(snp_list, !grepl("X|x|;|,| ", SNPS)) %>%
+  filter(grepl("rs*", SNPS)) 
+  
+#extract SNPs that don't end with a number (or make sure there aren't any)
+snp_list_end_bad <- filter(snp_list, grepl("*[A-Za-z]$", SNPS))
+
+#for CHR_IDs that are like 1;1;1, etc. keep only first characters before (;) split (these are multi-SNP haplotype entries)
+#snp_list$CHR_ID <- sapply(strsplit(snp_list$CHR_ID,";"), `[`, 1)
+#split dataframe(snp_list) into different dataframes based on chromosome id
+snp_list_chr <- split(snp_list, snp_list$CHR_ID)  
+
+#move chromosome 6 to end of list due to highest expected number of SNPs (because of MHC locus hypervariability) 
+chr_6 <- snp_list_chr["6"]
+snp_list_chr["6"] <- NULL    
+snp_list_chr <- c(snp_list_chr, chr_6)
+
+#get vector with chromosome numbers
+chr_vec <- c(names(snp_list_chr))
+
+#output snp_list_chr
+saveRDS(snp_list_chr, file = "/home/rstudio/data/snp_list_chr.rds")
+```
+
+
+Run LDproxy in batch mode to get files containing lists of correlated variants from SNPs in study together with associated info.
+```{r}
+
+#run LDproxy for all chromosomes, but save output files (tsv/txt files for each SNP) in separate directories
+for (i in c(22,23,24)) {
+
+ dir.create(file.path(LDout_dir , chr_vec[[i]]))
+  setwd(file.path(LDout_dir , chr_vec[[i]]))
+  LDproxy_batch(snp =snp_list_chr[[i]]$SNPS , pop = "CEU", r2d = "r2", token = ldlink_token, append = F)
+}
+```
+
+
+Get all .txt files (which are actually tsv files) outputed from LDlink, combine into a table with queried snp RS-number. Separate Coord column into chromosome and loc. Remove all SNPs wit R2 lower than 0.8.
+```{r}
+
+#define empty dataframe for later
+all_appended <- data.frame(queried_snp=character(),
+                           max_loc=numeric(),
+                           min_loc=numeric(),
+                           chromosome=character(),
+                           stringsAsFactors=FALSE)
+
+#function
+snp_function <- function(chr_id, snp_id) {
+  setwd(file.path(LDout_dir, chr_id))
+  snps_from_tsv <- read.table(snp_id, header = TRUE, sep = "\t", encoding = "UTF-8") %>%
+    separate(Coord, c('chromosome', 'loc'), ':') %>%
+    transform(loc = as.numeric(loc))
+  snps_locs <- as.data.frame(snps_from_tsv) %>%
+    filter(R2 >= 0.6) %>% 
+    summarize(max_loc = max(loc), min_loc = min(loc)) %>% 
+    add_column(chromosome=chr_id, queried_snp=snp_id)
+  return(snps_locs)
+}
+
+#loop through directories (named as chromosome numbers) and extract LD block genomic ranges using function, append to dataframe 
+for (j in c(1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 2, 20, 21, 22, 3, 4, 5, 6, 7, 8, 9, "X", "Y")) {
+  Ldout_dir_chr <- file.path(LDout_dir, j)
+  chr_fil_paths <- list.files(path = Ldout_dir_chr, pattern = "*.txt", full.names = T, recursive = T)
+  vec_snp_txt <- chr_fil_paths %>%
+  basename() %>%
+  as.list()
+  
+  for (i in vec_snp_txt) {
+    all_appended <- rbind(all_appended, snp_function(j, i))
+  }
+}
+
+#leave only non-redundant SNPs in dataframe, remove .txt from end of queried SNP rs number
+all_appended_uq <- unique(all_appended)
+all_appended_uq <-  separate(all_appended_uq, queried_snp, c('query_snp', 'rest'), "[.]") %>%
+  select(-rest)
+
+saveRDS(all_appended_uq, file="range_table.rds")
+
+```
+
+Get LD block range final object including empty strings for SNPs that failed the pipeline
+```{r}
+
+
+#some SNPs fail the pipeline (either missing chromosome ID, or rejected by LDproxy), list the failures for further analysis
+failed_snps <- setdiff(pull(snp_list_all, SNPS), pull(range_table, query_snp))
+```

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+#$ -N ldAggregation
+#$ -cwd
+
+module load R
+R CMD BATCH ldAggregation.R Rcodeoutput.txt

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+#$ -N LDproxy
+#$ -cwd
+
+module load R
+R CMD BATCH ldproxy.R Rcodeoutput_ldproxy.txt

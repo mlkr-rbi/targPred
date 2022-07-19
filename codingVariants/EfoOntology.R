@@ -1,0 +1,37 @@
+library(rols)
+library(dplyr)
+library(stringr)
+
+# Downloading efo ontology 
+
+efo_terms <- terms("efo")
+
+
+# Creating pairwise mappings
+
+## Initializing empty df
+efo_mappings <- data.frame(id1=NA, id2=NA, label=NA) 
+
+#cbind(efo_mappings, data.frame(id, unlist(efo_terms[[id]]@annotation$database_cross_reference), efo_terms[[id]]@label))
+
+## Looping through elements of the list
+for(i in 1:length(names(efo_terms@x))){
+  id <- names(efo_terms@x)[i]
+  if(i%%100 == 0) {message(i)}
+  
+  if(is.null(unlist(efo_terms[[id]]@annotation$database_cross_reference))){
+    ## Some ids have no cross refrences
+    working_df <-  data.frame(id, NA, efo_terms[[id]]@label)
+  }
+  
+  else{
+    working_df <-  data.frame(id, unlist(efo_terms[[id]]@annotation$database_cross_reference), efo_terms[[id]]@label)
+  }
+  
+  ## Changing colnames of working_df before binding
+  colnames(working_df) <- c("id1","id2","label")
+  efo_mappings <- rbind(efo_mappings, working_df)
+}
+
+saveRDS(efo_terms, "codingVariants/RDS/efo_terms.rds")
+saveRDS(efo_mappings, "codingVariants/RDS/efo_mappings.rds")
