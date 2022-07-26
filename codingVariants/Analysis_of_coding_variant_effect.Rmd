@@ -1,0 +1,56 @@
+---
+title: "Analysis of coding variant effect"
+output: html_notebook
+---
+
+# Description
+Analysis of coding variants in SNP context
+
+# Libraries
+```{r Libraries, message=FALSE}
+library(dplyr)
+library(gprofiler2)
+```
+
+# Loading data
+```{r}
+loci_in_GRBs <- read_csv("output/loci_in_GRBs_clnv.csv") %>%
+  # Maybe remove the next line if it is not there
+  select(-X)
+clnv <- readRDS("RDS/gnomad_clinvar_df_clean.rds")
+```
+
+
+# loci_clnv
+GRB genes and clnv genes are comma separated in columns. loci_clnv contains each grb and clnv gene separated in a row for further analysis. 
+```{r}
+loci_clnv <- filter(loci_in_GRBs, !is.na(clnv_gene)) %>%
+  separate_rows(clnv_gene) %>%
+  separate_rows(GRB_GENES)
+
+grb_clnv_match <- filter(loci_clnv, GRB_GENES == clnv_gene)
+grb_clnv_match
+```
+There are 20 terms where mapped_trait, grb_gene and clnv_gene match up and those are:
+* squamous cell carcinoma - FGFR2 
+* obesity - BDNF
+* Tourette syndrome - SOX5
+* atrial fibrillation - HCN4
+* atrial fibrillation - KCNJ2
+* atrial fibrillation - ANK2
+
+The Tourette syndrome SOX5 example shows that searching for parent terms in the ontology could prove beneficial. Other SNPs in the SOX5 GRB are *obsessive compulsive disorder* and *autism spectrum disorder* and all of them share the parent term of *mental disorders*. Furthermore, autism spectrum disorder and Tourette syndrom share a closer parent of *developmental disorder of mental health*. Additionally, an mendelian disease related to SOX5 is *Lamb-Shaffer syndrome* which is a rare disease with various mental and physical abnormalities.  
+
+Idea? Compare all disease terms. Find closest parent term, calculate some distance score. Have a column. disease term, closest parent, some score. 
+
+```{r}
+gost_ <- gost(filter(loci_clnv, MAPPED_TRAIT == "autism spectrum disorder") %>% pull(clnv_gene))
+
+gostplot(gost_)
+```
+
+
+# Session Info
+```{r Session info}
+sessionInfo()
+```
