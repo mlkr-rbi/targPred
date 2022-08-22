@@ -133,7 +133,7 @@ not_specified|not_provided"))) %>%
 
 ```{r, eval=FALSE}
 saveRDS(clnv, file="codingVariants/RDS/gnomad_clinvar_df_clean.rds")
-write.table(clnv, file = "codingVariants/output/clinVar.xlsx")
+#write.table(clnv, file = "codingVariants/output/clinVar.xlsx")
 ```
 
 
@@ -270,6 +270,8 @@ clnv <-
                     MONDO_ID = CLN_diseaseID)) %>%
   mutate(gene = str_split(GENEINFO, pattern = ":", simplify = TRUE)[,1])
 
+saveRDS
+
 # these do not have MONDO ID's, figure what to do with them  
 filter(clnv, is.na(MONDO_ID))
 
@@ -277,7 +279,14 @@ filter(clnv, is.na(MONDO_ID))
   left_join( clnv_terms, by = "CLNDN") %>%
   mutate(gene = str_split(GENEINFO, pattern = ":", simplify = TRUE)[,1])
 
+
 ```
+
+```{r, eval=FALSE}
+saveRDS(clnv, file="RDS/clinVar.rds")
+write.table(clnv, file = "output/clinVar.xlsx")
+```
+
 
 # Combining GRB data
 We add affected gene info that is associated with a disease.
@@ -332,7 +341,10 @@ clnv_disease_gene <-
   filter(!is.na(MONDO_ID))
 
 gwas_grb_clnv <- 
-  left_join(loci_in_GRBs, clnv_disease_gene)
+  left_join(loci_in_GRBs, clnv_disease_gene) %>%
+  dplyr::select(-X)
+
+write_csv(gwas_grb_clnv, "output/loci_in_GRBs_clnv.csv") 
 ```
 
 
@@ -363,7 +375,7 @@ length(unique(clnv_terms_nonM$CLNDN))
 message("Checking how much of terms (all of them are HP) are already in EFO ontology")
 table(is.element(clnv_terms_nonM$CLN_diseaseID, efo_mappings$id1))
 filter(clnv_terms_nonM, is.element(clnv_terms_nonM$CLN_diseaseID, efo_mappings$id1))
-messange("Number of diseases covered")
+message("Number of diseases covered")
 length(unique(filter(clnv_terms_nonM, is.element(clnv_terms_nonM$CLN_diseaseID, efo_mappings$id1)))$CLNDN)
 
 # Removing the previous subset that is already in EFO ontology
@@ -378,6 +390,7 @@ length(unique(filter(clnv_terms_nonM, is.element(clnv_terms_nonM$CLN_diseaseID, 
 
 
 clnv_terms_nonEFO <- filter(clnv_terms_nonM_nonHP, !is.element(CLNDN,unique(filter(clnv_terms_nonM, is.element(clnv_terms_nonM$CLN_diseaseID, efo_mappings$id2)))$CLNDN))
+
 
 ```
 Here i save the non EFO ids into an table locally and through https://www.ebi.ac.uk/ols/index i search for potential parent terms that would be appropriate for that label

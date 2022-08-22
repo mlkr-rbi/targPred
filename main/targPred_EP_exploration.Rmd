@@ -62,6 +62,7 @@ GRB_CAT_COLORS <- c("GRB-byst" ="#143159",
 
 
 # Master table
+This chunk checks if the master table is already calculated. If it is not true, run CREATE MASTER chunk
 ```{r}
 # Master table adress
 filename <- "data/by_GRB_list_MASTER.rds"
@@ -71,8 +72,8 @@ file.exists(filename)
 Here we build the master table from the by_GRB_list. This table will be
 used to calculate features of enh gene pairs
 
-This is a helper func
-
+## Helper functions
+This is a helper function. Not sure if usefull.
 ```{r}
 namedVecToDf <- function(named_vector, column_name = "col1"){
   df <- as.data.frame(named_vector) %>%
@@ -81,6 +82,43 @@ namedVecToDf <- function(named_vector, column_name = "col1"){
   return(df)
 }
 ```
+
+Helper function for bining the right part of histograms.
+```{r}
+calcHistogramDataMaxBin <- function(data_, max_bin){
+  # Input data vector for the histogram
+  # returns frequency data that can be plotted with bar plots
+  # This handles only numerical values and the function bins values > max_bin
+  
+  # Frequency table
+  data_tb <- table(data_) %>% as.data.frame()
+  # Summing up rows from max_bin to the end
+  total_ <- data_tb[(max_bin+1):dim(data_tb)[1], "Freq"] %>%
+    sum()
+  
+  # Selecting first n data
+  res_ <- data_tb[0:max_bin,] %>%
+    mutate(data_= as.character(data_))
+  # Adding the info from the rest
+  res_ <- rbind(res_,c("rest", total_)) %>%
+    select(x=data_, Freq)
+  # Locking positions? 
+  res_$x <- factor(res_$x, levels = res_$x)
+  
+  
+  
+  return(res_)
+}
+```
+
+Calculates number of data points in boxplots
+```{r}
+give.n <- function(x){
+  return(c(y = -0.5, label = length(x))) 
+  # experiment with the multiplier to find the perfect position
+}
+```
+
 
 A master table is built in a way that a combination of
 gene:transcript id and an enhancer range is the key (unique
@@ -106,8 +144,8 @@ Additional features:
 
 Looping through all grb's in the by_GRB_list to fetch all df.
 
-
-```{r, eval=FALSE}
+## Creating master
+```{r CREATE MASTER, eval=FALSE}
 master <- data.frame()
 empty_grbs <- c()
 for(i in 1:length(by_GRB_list)){
@@ -180,7 +218,11 @@ master <- master %>%
   left_join(master_ranges, by = c("enh","transcript"))
 
 rm(master_ranges)
-  
+
+# Setting 0 to non significant associations
+master <- master %>%
+  mutate(gene_num_4enh = ifelse(is.na(gene_num_4enh), 0, gene_num_4enh),
+         enh_num_4gene = ifelse(is.na(enh_num_4gene), 0, enh_num_4gene))
 
 saveRDS(master, "data/by_GRB_list_MASTER.rds")
 ```
@@ -194,18 +236,62 @@ master <- readRDS(filename)
 Histogram of number of genes associated per enhancer
 ```{r}
 master %>%
+  filter(emp <0.001) %>%
   select(enh, gene_num_4enh) %>%
   unique() %>%
   pull(gene_num_4enh) %>%
-  hist(breaks = 50, xlim=c(1,20), col="yellow")
+  hist(breaks = 50, xlim=c(1,20), col="yellow", 
+       main="Histogram of number of transcripts associated per enhancer")
+
+plot_df <-
+  master %>%
+  #filter(emp <0.001) %>%
+  select(enh, gene_num_4enh) %>%
+  unique()
+
+
+# Histogram with rest bar
+plot_df <- calcHistogramDataMaxBin(plot_df$gene_num_4enh, max_bin = 10)
+
+ggplot(plot_df, aes(x=x, y=as.numeric(Freq), width=1)) +
+  geom_bar(stat="identity",position = "identity" , fill="gold", colour="black") +
+  theme_minimal()+
+  ggtitle("Histogram of number of transcripts associated per enhancer")+
+  xlab("Number of transcripts")+
+  ylab("Frequency")
+
+ggplot(plot_df, aes(x=x, y=as.numeric(Freq) %>% log(), width=1)) +
+  geom_bar(stat="identity",position = "identity" , fill="gold", colour="black") +
+  theme_minimal()+
+  ggtitle("Histogram of number of transcripts associated per enhancer")+
+  xlab("Number of transcripts")+
+  ylab("Log frequency")
 ```
 Histogram of enhancers associated per one transcript
 ```{r}
 master %>%
+  filter(emp <0.001) %>%
   select(transcript, enh_num_4gene) %>%
   unique() %>%
   pull(enh_num_4gene) %>%
-  hist(breaks=50, xlim=c(0,20), col="darkred")
+  hist(breaks=50, xlim=c(0,20), col="darkred",
+       main="Histogram of number of enhancer associated with a transcript")
+
+
+plot_df <- 
+  master %>%
+  select(transcript, enh_num_4gene) %>%
+  unique()
+
+# This is enhancer number per gene with binned total value
+plot_df <- calcHistogramDataMaxBin(plot_df$enh_num_4gene, max_bin = 11)
+
+ggplot(plot_df, aes(x=x, y=Freq, width=1)) +
+  geom_bar(stat="identity", fill="darkred", colour="black") +
+  theme_minimal()+
+  ggtitle("Histogram of number of enhancer associated with a transcript")+
+  xlab("Number of genes")+
+  ylab("Frequency")
 ```
 ## Boxplots
 Genes are sorted in 5 bins by categories. Each gene (transcript) has an number of enhancers that they are associated with. In this boxplot we compare by category how many enhancers are assigned to each bin.
@@ -213,22 +299,31 @@ Genes are sorted in 5 bins by categories. Each gene (transcript) has an number o
 ```{r}
 # Subsetting unique transcripts
 master_transcript <- master %>%
-  filter(emp < 0.001) %>%
-  select(grb,ensembl,symbols=symbol,category,enh_num_4gene) %>%
+  #filter(emp < 0.001) %>%
+  select(grb, ensembl, symbols=symbol, transcript, category, enh_num_4gene) %>%
   unique()
-
 
 
 ggplot(master_transcript, aes(x=category, y=enh_num_4gene, fill=category)) +
   geom_boxplot()+
   theme_minimal() +
-  scale_fill_manual(values = GRB_CAT_COLORS)
+  coord_cartesian(ylim = c(0,20))+
+    stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE) +
+  stat_summary(fun.data = give.n, geom = "text")+
+  scale_fill_manual(values = GRB_CAT_COLORS)+
+  ggtitle("Boxplot of num enhancers associated with transcript per category")
+
 
 ggplot(master_transcript, aes(x=category, y=enh_num_4gene, fill=category)) +
   geom_violin()+
   coord_cartesian(ylim = c(0,20))+ 
   theme_minimal() +
-  scale_fill_manual(values = GRB_CAT_COLORS)
+  scale_fill_manual(values = GRB_CAT_COLORS)+
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)+
+  ggtitle("Violin of num enhancers associated with transcript per category")
 ```
 Box plots
 ```{r}
@@ -243,6 +338,7 @@ ggplot(master_transcript, aes(x=target_gene, y=enh_num_4gene, fill = target_gene
   coord_cartesian(ylim = c(0,20))+ 
   scale_fill_manual(values = c("black", "darkred")) +
   theme_minimal()+ 
+  stat_summary(fun.data = give.n, geom = "text")+
   stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
   stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)
 ```
@@ -253,7 +349,7 @@ The next chunk is similar, only with genes. Selecting the gene with the most num
 ```{r}
 # Subsetting unique genes
 master_genes <- master %>%
-  filter(emp < 0.001) %>%
+  #filter(emp < 0.001) %>%
   unique() %>%
   group_by(ensembl) %>%
   summarise(enh_num_4gene = max(enh_num_4gene)) %>%
@@ -266,11 +362,17 @@ master_genes <- master %>%
 ggplot(master_genes, aes(x=category, y=enh_num_4gene, fill=category)) +
   geom_boxplot()+
   theme_minimal() +
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)+
   scale_fill_manual(values = GRB_CAT_COLORS)
 
 ggplot(master_genes, aes(x=category, y=enh_num_4gene, fill=category)) +
   geom_violin()+
   coord_cartesian(ylim = c(0,20)) +
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)+
   scale_fill_manual(values = GRB_CAT_COLORS)+
   theme_minimal()
 ```
@@ -287,6 +389,7 @@ ggplot(master_genes, aes(x=target_gene, y=enh_num_4gene, fill = target_gene)) +
   coord_cartesian(ylim = c(0,20))+ 
   scale_fill_manual(values = c("black", "darkred")) +
   theme_minimal()+ 
+  stat_summary(fun.data = give.n, geom = "text")+
   stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
   stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)
 ```
@@ -294,7 +397,7 @@ ggplot(master_genes, aes(x=target_gene, y=enh_num_4gene, fill = target_gene)) +
 ### t test
 ```{r}
 
-x = dplyr::filter(master_genes, target_gene == "No")$enh_num_4gene
+x = dplyr::filter(master_genes, target_gene == "No" )$enh_num_4gene
 y = filter(master_genes, target_gene == "Yes")$enh_num_4gene
 print(t.test(x,y))
 ```
@@ -305,6 +408,7 @@ ggplot(master, aes(x=category, y=emp, fill=category)) +
   scale_fill_manual(values = GRB_CAT_COLORS)+
   theme_minimal()+
   stat_ydensity() +
+  stat_summary(fun.data = give.n, geom = "text", fun.max = - 0.2)+
   stat_summary(fun = "mean", geom = "crossbar", color = "black", size = 0.4, show.legend = FALSE)
 
 table(master$category)
@@ -345,36 +449,45 @@ ggplot(filter(master, emp < 0.001), aes(x=enh_trans_range)) +
   theme_minimal()+
   coord_cartesian(ylim = c(0,100))+
   facet_wrap(~ranges_binned, scales = "free_x")+
-  ggtitle("Histograms of singificant genomic distances in 4 bins - 10^(3,4,5,6)")
+  ggtitle("Histograms of genomic distances in 4 bins - 10^(3,4,5,6), p<0.001")
 ```
 
 ## Cumulative plots
 Cumulative frequency of enhancer-transcript distances
 ```{r}
 # All
-plot(ecdf(log(master$enh_trans_range, 10)))
+plot(ecdf(log(master$enh_trans_range, 10)),
+     main="Cumulative frequency of enhancer-transcript distances")
 ```
 
-
+Cumulative frequency of enhancer-transcript distances, significant
 ```{r}
 # Significant enhancer-transcript associations
-plot(ecdf(log(filter(master, emp < 0.001)$enh_trans_range,10)))
+plot(ecdf(log(filter(master, emp < 0.001)$enh_trans_range,10)), 
+     main="Cumulative frequency of enhancer-transcript distances, p <0.001")
+  
 ```
-## Genomic distance by category
+## Gen dist by category
 Histogram of distance distribution by category
 ```{r}
 ggplot(filter(master, emp < 0.001), aes(x=log(enh_trans_range,10)))+
   geom_histogram(bins = 50)+
   #coord_cartesian(ylim = c(0,200))+
-  facet_wrap(~category, scales = "free")
+  facet_wrap(~category, scales = "free")+
+  theme_dark()+
+  xlab("Enhancer-transcript range, log10 base")+
+  ggtitle("Histogram of enh-trans distance binned by category, p<0.001")
 ```
 Cumulative plot of distances
 ```{r}
 ggplot(filter(master, emp < 0.001), aes(x=log(enh_trans_range,10)))+
   geom_histogram(aes(y=cumsum(..count..)), bins = 50)+
-  facet_wrap(~category, scales = "free")
+  facet_wrap(~category, scales = "free")+
+  theme_dark()+
+  xlab("Enhancer-transcript range, log10 base")+
+  ggtitle("Cumulative plot of enh-trans distance binned by category, p<0.001")
 ```
-# Counting enhancer - promoter (EP) pair per category and distance bin
+# EP count distance category - Counting enhancer - promoter (EP) pair per category and distance bin
 
 Here we count enhancers that regulate a gene selecting only those with p value < 0.001 (or some other).
 From the master df that contains values of each enh-gene emp values we first separate them by ranges as defined above. Then, per range bin we count how many enhancers regulate a gene(transcript). To visualize that we separate genes by category status they have in GRB. As explained above.
@@ -389,58 +502,68 @@ EP_pair_count <-
   select(enh_num_4gene_binned = n, everything())
 
 master <- left_join(master, EP_pair_count)
+
+master <- master %>%
+  mutate(enh_num_4gene_binned = ifelse(is.na(enh_num_4gene_binned), 0, enh_num_4gene_binned))
 ```
-## Plotting binned categories 
+## Ploting EP count-dist-cat bins
 ```{r}
-ggplot(filter(master, emp < 0.001) %>% 
+master_ep_categories <- 
+  master %>%
+         #filter(emp < 0.001) %>% 
          select(transcript, category, enh_num_4gene_binned, ranges_binned) %>% 
-         unique(),
+         unique()
+
+ggplot(master_ep_categories,
        aes(x=category, y=enh_num_4gene_binned, fill=category)) +
-  geom_violin(draw_quantiles = c(0.5))+
+  geom_violin(adjust = 2)+
   theme_minimal()+
   theme(axis.text.x=element_blank())+
-  coord_cartesian(ylim = c(0,5))+
+  coord_cartesian(ylim = c(-0.5,5))+
   facet_wrap(~ranges_binned, scales = "free", nrow = 2, ncol = 3)+
   ggtitle("Number of enhancers per gene by category")+
-  #geom_text(data = master, aes(x=category, y = 0))+
-  stat_summary(fun = "median", geom = "crossbar", color = "darkblue", size = 0.4, show.legend = FALSE)+
-  stat_summary(fun = "mean", geom = "crossbar", color = "black", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE) +
+  stat_summary(fun.data = give.n, geom = "text")+
   # Adding colors to categories
   scale_fill_manual(values = GRB_CAT_COLORS)
 ```
 
 ```{r}
+# ADding target_gene = Yes/No to master
+master <- master %>%
+  dplyr::mutate(target_gene =
+                  case_when(is.element(ensembl,trg_genes$ENSEMBLGeneID) ~ "Yes",
+                            !is.element(ensembl,trg_genes$ENSEMBLGeneID) ~ "No"))
+
 # Subseting master to get unique combinations 
-master_sub <- filter(master, emp < 0.001) %>% 
-         select(transcript, category, enh_num_4gene_binned, ranges_binned, target_gene) %>% 
-         unique()
+master_sub <- master %>%
+  #filter(emp < 0.001) %>% 
+  select(transcript, enh_num_4gene_binned, ranges_binned, target_gene) %>% 
+  unique()
   
 ggplot(master_sub, aes(x=target_gene, y=enh_num_4gene_binned,fill=target_gene))+
   geom_boxplot() +
   theme_minimal()+
   facet_wrap(~ranges_binned, scales = "free", nrow = 2, ncol = 3)+
-  coord_cartesian(ylim = c(0,10))+
+  coord_cartesian(ylim = c(-0.5,10))+
   scale_fill_manual(values = c("black", "darkred"))+
+  stat_summary(fun.data = give.n, geom = "text")+
   stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
   stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)
 ```
 ### t test 
 ```{r}
-for(i in master$ranges_binned %>% unique() %>% sort){
+for(i in master_sub$ranges_binned %>% unique() %>% sort){
   x = filter(master_sub, ranges_binned == i & target_gene == "No")$enh_num_4gene_binned
   y = filter(master_sub, ranges_binned == i & target_gene == "Yes")$enh_num_4gene_binned
   print(paste("Interval", i))
   print(t.test(x,y))
 }
 ```
-## Cumulative binned categories
+## Cumulative EP count-dist-cat
 Summing up EP pairs per distance bins
 ```{r}
-
-# Adding target gene flag
-master <- master %>%     
-  mutate(target_gene =case_when(is.element(ensembl,trg_genes$ENSEMBLGeneID) ~ "Yes",
-                                !is.element(ensembl,trg_genes$ENSEMBLGeneID) ~ "No"))
 
 EP_pair_count <- 
   master %>%
@@ -454,6 +577,10 @@ EP_pair_count <-
 master <- 
   left_join(master, EP_pair_count)
 
+# Changing NA to 0
+master <- master %>%
+  mutate(cm_enh_num_4gene = ifelse(is.na(cm_enh_num_4gene), 0, cm_enh_num_4gene))
+
 print("Example")
 master %>%
   filter(emp < 0.001 & transcript =="ENST00000308873") %>%
@@ -461,19 +588,21 @@ master %>%
   unique() %>%
   arrange(ranges_binned)
 ```
-## ploting cumulative enhancers distance binned
+## Ploting Cumulative EP count-dist-cat
 ```{r}
-ggplot(filter(master, emp < 0.001) %>%
+ggplot(master %>%
+         #filter(emp < 0.001) %>%
          select(transcript, ranges_binned, category, cm_enh_num_4gene)%>%
          unique(),
        aes(x=category, y=cm_enh_num_4gene, fill=category)) +
-  geom_violin(draw_quantiles = c(0.5))+
+  geom_violin(adjust=2)+
   theme_minimal()+
   theme(axis.text.x=element_blank())+
-  coord_cartesian(ylim = c(0,15))+
+  coord_cartesian(ylim = c(-0.5,15))+
   facet_wrap(~ranges_binned, scales = "free", nrow = 2, ncol = 3)+
-  ggtitle("Number of enhancers per gene by category")+
+  ggtitle("Number of enhancers per gene by category cumulative")+
   #geom_text(data = master, aes(x=category, y = 0))+
+  stat_summary(fun.data = give.n, geom = "text")+
   stat_summary(fun = "median", geom = "crossbar", color = "darkblue", size = 0.4, show.legend = FALSE)+
   stat_summary(fun = "mean", geom = "crossbar", color = "black", size = 0.4, show.legend = FALSE)+
   # Adding colors to categories
@@ -483,16 +612,18 @@ Target genes
 
 ```{r}
 # Subseting for plots (use unique combinations not the master table which is full)
-master_sub <- filter(master, emp < 0.001) %>%
-         select(transcript, ranges_binned, target_gene, cm_enh_num_4gene) %>%
-         unique()
+master_sub <- master %>%
+  #filter(emp < 0.001) %>%
+  select(transcript, ranges_binned, target_gene, cm_enh_num_4gene) %>%
+  unique()
 
 ggplot(master_sub, aes(x=target_gene, y=cm_enh_num_4gene,fill=target_gene))+
   geom_boxplot() +
   theme_minimal()+
   facet_wrap(~ranges_binned, scales = "free", nrow = 2, ncol = 3)+
-  coord_cartesian(ylim = c(0,15))+
+  coord_cartesian(ylim = c(-0.8,15))+
   scale_fill_manual(values = c("black", "darkred"))+
+  stat_summary(fun.data = give.n, geom = "text")+
   stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
   stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)
 ```
