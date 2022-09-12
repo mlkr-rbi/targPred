@@ -88,6 +88,7 @@ cne_density_grb <-
   # Reducing since some GRBs overlap
   # Look at CNE_density_overlapping_GRBs.txt for examples
   GenomicRanges::reduce()
+start(cne_density_grb) = start(cne_density_grb) -1
 
 # Target genes for CNE density GRBs 
 target_genes <- 
@@ -95,7 +96,8 @@ target_genes <-
 
 # Kurtosis based, used for modifying CNE GRBs
 kurtosis_grb <- 
-  import.bed("data/hg19_canFam3_binned_kurtosis_arl_370_0.7_pc_30_kb_windows_grbs.bed")
+  rtracklayer::import.bed("data/hg19_canFam3_binned_kurtosis_arl_370_0.7_pc_30_kb_windows_grbs.bed", genome = "hg19")
+start(kurtosis_grb) = start(kurtosis_grb) -1
 
 # Fantom5 enhancers tpm - Loading later since it is a big file
 # fantom5.enhancers.tpm.gr <-
@@ -212,7 +214,7 @@ cne_density_grb_modf <-
 
 ## Storing for visualization
 # Commenting out this so that every rerun does not overwrite
-#export.bed(cne_density_grb_modf, "data/CNE_density_modf_kurtosis.bed")
+export.bed(cne_density_grb_modf, "data/CNE_density_modf_kurtosis.bed")
 
 rm(kurtosis_grb, cne_density_grb, snps_two_grbs, snps_two_grbs_index)
 ```
@@ -262,6 +264,20 @@ loci_in_GRBs.gr$GRB_GENES[queryHits(ovlp)] <-
   cne_density_grb_modf[subjectHits(ovlp)]$geneName
 ```
 
+Saving loci (LD blocks for SNPs) in bed format for visualizing in the Genome Browser
+```{r, eval=FALSE}
+temp <-
+  data.frame(seqnames=seqnames(loci_in_GRBs.gr),
+  starts=start(loci_in_GRBs.gr)-1,
+  ends=end(loci_in_GRBs.gr),
+  names=c(rep(".", length(loci_in_GRBs.gr))),
+  scores=c(rep(".", length(loci_in_GRBs.gr))),
+  strands=strand(loci_in_GRBs.gr))
+
+write.table(temp, file="data/loci_in_GRBs.bed", quote=F, sep="\t", row.names=F, col.names=F)
+
+export.bed(loci_in_GRBs.gr, con = "data/loci_in_GRBs.bed")
+```
 
 
 # Separating Traits
@@ -274,7 +290,7 @@ in MAPPED_TRAIT_URI. Traits are comma separated but some trait names
 contain commas. To avoid error prone case by case exceptions, trait
 separation will be based on the URI and trait names will be cross mapped
 from the ontology.
-
+! TODO: Consider using MONDO since there was an update which uses MONDO IDs for existing traits insted of EFO so some EFO ids are obsolete.
 ```{r}
 # Transforming loci in GRB to dataframe
 loci_in_GRBs.df <- mcols(loci_in_GRBs.gr) %>%
@@ -368,10 +384,19 @@ for(id in 1:dim(loci_in_GRBs.df)[1]){
   
 }
 
-write.csv(loci_in_GRBs.df, file = "data/loci_in_GRBs.df.csv")
+# Removing the obsolete_ addition from some trait labels
+loci_in_GRBs.df <- 
+  loci_in_GRBs.df %>%
+  mutate(MAPPED_TRAIT = ifelse(str_detect(MAPPED_TRAIT,"obsolete_"),
+                               str_remove(MAPPED_TRAIT, "obsolete_"), 
+                               MAPPED_TRAIT))
+  
+
+
+# write.csv(loci_in_GRBs.df, file = "data/loci_in_GRBs.df.csv")
 # Making GRanges for the same dataframe, now separated
 loci_in_GRBs.gr <- grangesFromDataframe(loci_in_GRBs.df, LDblock)
-saveRDS(loci_in_GRBs.gr, "data/loci_in_GRBs_gr.rds")
+# saveRDS(loci_in_GRBs.gr, "data/loci_in_GRBs_gr.rds")
 ```
 
 # byGRB_list 
@@ -381,14 +406,23 @@ Nije dovrseno....
 ```{r}
 loci_in_GRBs.gr <- readRDS( "data/loci_in_GRBs_gr.rds")
 
-fantom5.enhancers.tpm.gr <-
-  read.csv("data/human_permissive_enhancers_phase_1_and_2_expression_tpm_matrix.txt",
-           sep = "\t", header = TRUE)
+# Downloaded from fantom5 site
+## ! 12.09. fantom5 data is processed in some way so i downloaded Anjas daat
+# fantom5.enhancers.tpm.gr <-
+#   read.csv("data/human_permissive_enhancers_phase_1_and_2_expression_tpm_matrix.txt",
+#            sep = "\t", header = TRUE) %>%
+#   grangesFromDataframe(colName = Id, keep_metadata = T)
+
+fantom5.enhancers.tpm.gr <- readRDS("data/fantom5.enhancers.tpm.pooled.gr.rds")
+promoter_cage_tpm_df <- readRDS("data/promoter_cage_tpm_df_fixed_pooled.rds")
 
 grbs <- import.bed("data/CNE_density_modf_kurtosis.bed")
 
 # list with gene ids
 genes.hg19.ensembl <- readRDS("data/genes.hg19.ensembl.rds")
+
+# Sent by Anja by mail (from fantom5 data)
+TSSs.perTranscript.gr <- readRDS("data/TSSs.perTranscript.gr.rds")
 ```
 
 Skip
@@ -412,6 +446,7 @@ ensembl95 <- useEnsembl(biomart = 'genes',
 # makes sure to work on the GRB level, even when one GRB covers multiple loci
 grb_subset <- subsetByOverlaps(grbs, loci_in_GRBs.gr)
 #saveRDS(grb_subset, paste0(study_name, "_grb_subset_GeThesisTargets.rds"))
+# loci.gr is loci.hg19.gr in Anjas script
 loci.gr <- loci_in_GRBs.gr
 
 byGRB_list <- vector("list", length(grb_subset))
@@ -432,13 +467,13 @@ for (i in 1:length(grb_subset)) {
   if(!identical(loaded_chr, as.character(seqnames(grb_subset[i])))) {
     
     loaded_chr <- as.character(seqnames(grb_subset[i]))
-    rho_gr <- load_per_chr_rho_file(loaded_chr)
+    #rho_gr <- load_per_chr_rho_file(loaded_chr)
     empP_gr <- load_per_chr_empP_file(loaded_chr)
     
   }
   
   # fill in the second element - df of spearman's rho
-  byGRB_list[[i]][[2]] <- per_GRB_correlation_matrix(rho_gr, grb_subset[i], byGRB_list[[i]][[1]]$ens)
+  #byGRB_list[[i]][[2]] <- per_GRB_correlation_matrix(rho_gr, grb_subset[i], byGRB_list[[i]][[1]]$ens)
   
   # fill in the third element - df of mutual information scores
   #byGRB_list[[i]][[3]] <- per_GRB_mi_matrix(mi_gr, grb_subset[i], byGRB_list[[i]][[1]]$ens)
@@ -447,12 +482,31 @@ for (i in 1:length(grb_subset)) {
   byGRB_list[[i]][[3]] <- per_GRB_empP_matrix(empP_gr, grb_subset[i], byGRB_list[[i]][[1]]$ens)
     
   # fill in the fourth element with information on enhancers in this GRB
-  byGRB_list[[i]][[4]] <- per_GRB_enhancers_classification(fantom5.enhancers.tpm.gr, grb_subset[i], 
-                                                           byGRB_list[[i]][[1]]$ens, 
-                                                           loci.hg19.gr, TSSs.perTranscript.gr)
+  # byGRB_list[[i]][[4]] <- 
+  #   per_GRB_enhancers_classification(fantom5.enhancers.tpm.gr, 
+  #                                    grb_subset[i],
+  #                                    byGRB_list[[i]][[1]]$ens,                                                           loci.gr, 
+  #                                    TSSs.perTranscript.gr)
 }
 ```
 
+
+
+```{r}
+targPred_byGRB_list[["chr1_27234255_3358395"]]
+byGRB_list[["chr1_2723425_3358395"]]
+
+```
+# Plotting
+```{r}
+
+i <- 4
+plots_prom_expression_beanplot_per_locus(byGRB_list, i, 
+                                           neuronal=F, sign="permutation", 
+                                           dir="data/expression_pairs_dir",
+                                         file_suffix="_gene_expression_beanplot_perm_median.png")
+
+```
 
 # Session Info
 

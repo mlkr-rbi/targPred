@@ -42,6 +42,11 @@ grb_clnv_match
 
 gwas_clnv_match <- 
   filter(loci_clnv, GWAS_GENES == clnv_gene) %>% unique()
+
+
+# Non overlap
+grb_clnv_match %>%
+  filter(!is.element(SNPS, gwas_clnv_match$SNPS))
 ```
 There are 20 terms where mapped_trait, grb_gene and clnv_gene match up and those are:
 * squamous cell carcinoma - FGFR2 

@@ -591,7 +591,7 @@ master %>%
 ## Ploting Cumulative EP count-dist-cat
 ```{r}
 ggplot(master %>%
-         #filter(emp < 0.001) %>%
+         filter(emp < 0.001) %>%
          select(transcript, ranges_binned, category, cm_enh_num_4gene)%>%
          unique(),
        aes(x=category, y=cm_enh_num_4gene, fill=category)) +
@@ -600,11 +600,11 @@ ggplot(master %>%
   theme(axis.text.x=element_blank())+
   coord_cartesian(ylim = c(-0.5,15))+
   facet_wrap(~ranges_binned, scales = "free", nrow = 2, ncol = 3)+
-  ggtitle("Number of enhancers per gene by category cumulative")+
+  ggtitle("Number of enhancers per transcript by category cumulative")+
   #geom_text(data = master, aes(x=category, y = 0))+
   stat_summary(fun.data = give.n, geom = "text")+
-  stat_summary(fun = "median", geom = "crossbar", color = "darkblue", size = 0.4, show.legend = FALSE)+
-  stat_summary(fun = "mean", geom = "crossbar", color = "black", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)+
   # Adding colors to categories
   scale_fill_manual(values = GRB_CAT_COLORS)
 ```
@@ -613,7 +613,7 @@ Target genes
 ```{r}
 # Subseting for plots (use unique combinations not the master table which is full)
 master_sub <- master %>%
-  #filter(emp < 0.001) %>%
+  filter(emp < 0.001) %>%
   select(transcript, ranges_binned, target_gene, cm_enh_num_4gene) %>%
   unique()
 
@@ -628,7 +628,7 @@ ggplot(master_sub, aes(x=target_gene, y=cm_enh_num_4gene,fill=target_gene))+
   stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)
 ```
 
-### ttest
+### t test
 ```{r}
 for(i in master$ranges_binned %>% unique() %>% sort){
   x = filter(master_sub, ranges_binned == i & target_gene == "No")$cm_enh_num_4gene
@@ -637,6 +637,105 @@ for(i in master$ranges_binned %>% unique() %>% sort){
   print(t.test(x,y))
 }
 ```
+
+
+# Multiple transcripts
+Some genes have different transcripts that are regulated by same or different enhancers. Here we extract those genes and analyze them. 
+## Extracting transcripts
+First filtering out the multiple transcripts
+```{r}
+# Selecting rows from master that contain significant transcripts
+multiple_transcripts <-
+  master %>%
+  filter(emp < 0.001)%>%
+  select(grb, gene_trans, enh, transcript, ensembl, symbol, category) %>%
+  unique() %>%
+  group_by(ensembl) %>%
+  filter( length(unique(ensembl)) < length(unique(transcript))) %>%
+  mutate(num_of_transcripts = length(unique(transcript))) %>%
+  group_by(transcript)
+
+# For each transcript storing enhancers as a vector
+trans_enh_vec <- multiple_transcripts %>%
+  summarize(enh_vec=list(unique(enh)))
+
+# Addinng the enhancer vector to the transcript
+# Each row corresponds to one transcript
+multiple_transcripts <-
+  multiple_transcripts %>%
+  left_join(trans_enh_vec) %>%
+  select(everything(), -enh) %>%
+  unique()%>%
+  mutate(enh_num = lengths(enh_vec)) %>%
+  ungroup
+```
+
+```{r}
+# Helper function to calculate the ratio of TRUE instances in a vector
+calcTruePerc <- function(vec){
+  if(typeof(vec) != "logical"){
+    stop("The vector is not a TRUE FALSE logical vector")
+  }
+  return(table(vec)["TRUE"]/length(vec))
+}
+
+# Modified is.element that returns the truePerc
+isElementPerc <- function(x,y){
+  return(calcTruePerc(is.element(x,y)))
+}
+```
+
+
+
+
+Storing transcript comparisons in enh_overlap
+```{r}
+# Storing the result of the comparisons in a new column
+multiple_transcripts$enh_overlaps <- NA
+
+for(ensembl_id in multiple_transcripts %>% pull(ensembl) %>% unique()){
+  
+  working_gene <- multiple_transcripts %>%
+    filter(ensembl == ensembl_id)
+  
+    # Store result in a matrix
+    working_nrow <- nrow(working_gene)
+    working_mat <- matrix(nrow = working_nrow, ncol = working_nrow)
+    rownames(working_mat) <- working_gene$transcript
+    colnames(working_mat) <- working_gene$transcript
+    # Looping through elements tu build a matrix
+    for (i in 1:working_nrow){
+      for(j in 1:working_nrow){
+        working_mat[i,j] <- 
+          calcTruePerc(is.element(working_gene[i,]$enh_vec[[1]], working_gene[j,]$enh_vec[[1]])) 
+      }
+    }
+    # Adding the overlap matrices to multiple transcritps
+    for(i in 1:working_nrow){
+      working_mat[is.na(working_mat)] <- 0
+      multiple_transcripts[multiple_transcripts$transcript == working_gene[i,]$transcript,]$enh_overlaps <- list(working_mat)
+    }
+      
+}
+```
+
+
+
+
+While exploring multiple transcripts I found that some genes stored in master have more than one category because they are included in neighbouring GRBs. 
+```{r}
+genes_multiple_categories <- filter(master, is.element(ensembl,master %>% select(ensembl, category) %>% unique() %>% filter(duplicated(ensembl)) %>% pull(ensembl))) %>% select(ensembl, category, grb) %>% unique 
+
+
+write.csv(genes_multiple_categories, file ="data/MASTER_genes_with_multiple_categories.csv")    
+
+multiple_transcripts %>%
+  filter(!(is.element(ensembl, genes_multiple_categories$ensembl) & str_detect(category, "out")))
+
+multiple_transcripts %>%
+  filter(is.element(ensembl, genes_multiple_categories$ensembl) ) %>% View
+```
+
 
 # Session Info
 
