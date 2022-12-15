@@ -289,7 +289,7 @@ gwas_snps_LDblocks <- readRDS("data/gwas_snps_LDblocks.rds") %>%
   # Creating a column for LDblock that can be easily converted to gr 
   # Format: chr1:1234-1456
   mutate(LDblock = str_c(chromosome,":",min_loc,"-",max_loc)) %>%
-  select(SNPS, LDblock)
+  dplyr::select(SNPS, LDblock)
 
 # Determining failed SNPs
 failed_snps <- gwas_snps %>%

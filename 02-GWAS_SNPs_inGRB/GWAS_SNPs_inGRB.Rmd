@@ -11,11 +11,16 @@ Individual SNPs are not considered but their respective LD block.
 # Libraries
 
 ```{r Libraries, message=FALSE}
-library(tidyverse)
 library(GenomicRanges)
 library(rtracklayer)
 library(purrr)
 library(curl)
+library(RColorBrewer)
+library(org.Hs.eg.db)
+library(Gviz)
+library(BSgenome.Hsapiens.UCSC.hg19)
+library(SNPlocs.Hsapiens.dbSNP144.GRCh37)
+library(tidyverse)
 
 # Utils based on Anjas functions : expression_matrix_cage_functions.R
 source("utils.R")
@@ -34,10 +39,11 @@ position will be removed. LD blocks are Grch37 assembly. Only relevant
 columns will be selected, other data can be obtained relationaly from
 the original gwas_association, gwas_ancestry or gwas_study data.
 
-GRBs are stored on github and downloaded locally
-## Downloading GRBs
-Threshold data, GRBs and target genes where provided to me via mail. All necessary files are stored on github repo.
-All are first downloaded, then loaded in the next chunk
+GRBs are stored on github and downloaded locally ## Downloading GRBs
+Threshold data, GRBs and target genes where provided to me via mail. All
+necessary files are stored on github repo. All are first downloaded,
+then loaded in the next chunk
+
 ```{r, eval=FALSE}
 url3<- "https://raw.githubusercontent.com/PKatarina/GRB/main/GRB_thresholds_beds/hg19.canFam3.98.50.processed.threshold.grbs.bed"
 
@@ -58,17 +64,14 @@ download.file(url6, destfile = "data/human_permissive_enhancers_phase_1_and_2_ex
 
 ```
 
-
 ```{bash, eval = FALSE}
 gunzip data/human_permissive_enhancers_phase_1_and_2_expression_tpm_matrix.txt.gz
 ```
 
-
-
 ```{r}
 # Filips SNP, check if they match up?
 gwas <- readRDS("data/granges_full.rds") %>%
-  select(CHR= "chromosome", SNPS = "query_snp", LDblock = "LDblock.0.6", STUDY.ACCESSION, REPORTED.GENE.S.,
+  dplyr::select(CHR= "chromosome", SNPS = "query_snp", LDblock = "LDblock.0.6", STUDY.ACCESSION, REPORTED.GENE.S.,
          MAPPED_GENE, P.VALUE, MAPPED_TRAIT, MAPPED_TRAIT_URI) %>%
   filter(!is.na(CHR))
 
@@ -99,14 +102,11 @@ kurtosis_grb <-
   rtracklayer::import.bed("data/hg19_canFam3_binned_kurtosis_arl_370_0.7_pc_30_kb_windows_grbs.bed", genome = "hg19")
 start(kurtosis_grb) = start(kurtosis_grb) -1
 
-# Fantom5 enhancers tpm - Loading later since it is a big file
-# fantom5.enhancers.tpm.gr <-
-#   read.csv("data/human_permissive_enhancers_phase_1_and_2_expression_tpm_matrix.txt",
-#            sep = "\t", header = TRUE)
 
 ```
 
 # Helper functions
+
 ```{r make granges from dataframe, eval=FALSE}
 
 grangesFromDataframe <- function(data, colName, keep_metadata=TRUE){
@@ -134,15 +134,19 @@ grangesFromDataframe <- function(data, colName, keep_metadata=TRUE){
 }
 ```
 
-
 # Preprocessing gwas data
-Gwas catalog stores the putative target gene of an SNP in two columns:
-(from https://www.ebi.ac.uk/gwas/docs/fileheaders )
-REPORTED GENE(S)*: Gene(s) reported by author
-MAPPED GENE(S)*: Gene(s) mapped to the strongest SNP. If the SNP is located within a gene, that gene is listed. If the SNP is located within multiple genes, these genes are listed separated by commas. If the SNP is intergenic, the upstream and downstream genes are listed, separated by a hyphen.
-- Combine the two columns in a single column GWAS_genes
 
-- transforming SNP LD blocks dataframe into gr object
+Gwas catalog stores the putative target gene of an SNP in two columns:
+(from <https://www.ebi.ac.uk/gwas/docs/fileheaders> ) REPORTED GENE(S)*:
+Gene(s) reported by author MAPPED GENE(S)*: Gene(s) mapped to the
+strongest SNP. If the SNP is located within a gene, that gene is listed.
+If the SNP is located within multiple genes, these genes are listed
+separated by commas. If the SNP is intergenic, the upstream and
+downstream genes are listed, separated by a hyphen. - Combine the two
+columns in a single column GWAS_genes
+
+-   transforming SNP LD blocks dataframe into gr object
+
 ```{r}
 non_gene_names <- c("",NA,"intergenic","Intergenic", "NR")
 
@@ -154,15 +158,13 @@ gwas <-
                                 TRUE ~ str_c(REPORTED.GENE.S., MAPPED_GENE, sep = ", "))) %>%
   # Removing repeated genes (eg. SKIV2L, SKIV2L, SKIV2L, SKIV2L, SKIV2L, SKIV2L)
   mutate(GWAS_GENES = map_chr(str_split(temp, ", "), ~str_c(unique(.x),collapse = ", "))) %>%
-  select(-c(temp, REPORTED.GENE.S., MAPPED_GENE))
+  dplyr::select(-c(temp, REPORTED.GENE.S., MAPPED_GENE))
 
 
 ## gwas_gr stores SNP LD blocks in GenomicRanges object
 gwas_gr <- grangesFromDataframe(gwas, LDblock)
 
-
 ```
-
 
 # Modifying GRB intervals
 
@@ -174,12 +176,13 @@ example:
 
 ![](images/paste-D46F103C.png)
 
-To do this, following steps were performed:
-- Adding target gene info to grb genomic ranges
-- Selecting SNP LD blocks that span 2 (or more - duplicated()) CNE based GRBs
-- Selecting those CNE based GRBs (those that are spanned by one SNP LD block)
-- Selecting kurtosis based GRBs that overlap those CNE based GRBs and *adding* them to the total data frame of CNE based GRBs
-- Using the function *reduce* that results in non overlapping GRBs
+To do this, following steps were performed: - Adding target gene info to
+grb genomic ranges - Selecting SNP LD blocks that span 2 (or more -
+duplicated()) CNE based GRBs - Selecting those CNE based GRBs (those
+that are spanned by one SNP LD block) - Selecting kurtosis based GRBs
+that overlap those CNE based GRBs and *adding* them to the total data
+frame of CNE based GRBs - Using the function *reduce* that results in
+non overlapping GRBs
 
 ```{r}
 # Overlapping all SNps to GRBs(After modification there should not be duplicated query hits)
@@ -214,22 +217,24 @@ cne_density_grb_modf <-
 
 ## Storing for visualization
 # Commenting out this so that every rerun does not overwrite
-export.bed(cne_density_grb_modf, "data/CNE_density_modf_kurtosis.bed")
+#export.bed(cne_density_grb_modf, "data/CNE_density_modf_kurtosis.bed")
+# Storing RDS so that it keeps the right start (bed is 0 based)
+saveRDS(cne_density_grb_modf, "data/CNE_density_modf_kurtosis.rds")
 
 rm(kurtosis_grb, cne_density_grb, snps_two_grbs, snps_two_grbs_index)
 ```
 
 ## Adding GRB target genes
 
-Adding GRB target genes to each GRB
-- Making granges from dataframe
-- Overlapping and left join to GRB to keep GRB intervals and adding metadata
-- Multiple target genes may be assigned to a GRB from various reasons, collapsing them into a by GRB row and comma separated  
-
+Adding GRB target genes to each GRB - Making granges from dataframe -
+Overlapping and left join to GRB to keep GRB intervals and adding
+metadata - Multiple target genes may be assigned to a GRB from various
+reasons, collapsing them into a by GRB row and comma separated
 
 ```{r}
 # Building target gene genomic ranges
-target_genes_gr <- grangesFromDataframe(target_genes, ucscCoordinates.hg19)
+target_genes_gr <- grangesFromDataframe(target_genes,
+                                        colName =ucscCoordinates.hg19)
 
 # Adding target genes as metadata 
 cne_density_grb_modf <- 
@@ -247,11 +252,14 @@ cne_density_grb_modf <-
   ungroup() %>%
   makeGRangesFromDataFrame(keep.extra.columns = TRUE)
 
+saveRDS(cne_density_grb_modf, file = "data/GRBs_CNE_density_modf_kurtosis.rds")
 ```
 
-# SNP loci in GRBs
-*Anjas part*
-After preparing gwas_gr and cne_density_grb_modf subseting those SNPs that are in GRBs and storing in loci_inGRB.gr. 
+# Loci in GRBs
+
+*Anjas part* After preparing gwas_gr and cne_density_grb_modf subseting
+those SNPs that are in GRBs and storing in loci_inGRB.gr.
+
 ```{r}
 loci_in_GRBs.gr <- subsetByOverlaps(gwas_gr, cne_density_grb_modf)
 ovlp <- findOverlaps(loci_in_GRBs.gr, cne_density_grb_modf)
@@ -264,7 +272,9 @@ loci_in_GRBs.gr$GRB_GENES[queryHits(ovlp)] <-
   cne_density_grb_modf[subjectHits(ovlp)]$geneName
 ```
 
-Saving loci (LD blocks for SNPs) in bed format for visualizing in the Genome Browser
+Saving loci (LD blocks for SNPs) in bed format for visualizing in the
+Genome Browser
+
 ```{r, eval=FALSE}
 temp <-
   data.frame(seqnames=seqnames(loci_in_GRBs.gr),
@@ -279,7 +289,6 @@ write.table(temp, file="data/loci_in_GRBs.bed", quote=F, sep="\t", row.names=F, 
 export.bed(loci_in_GRBs.gr, con = "data/loci_in_GRBs.bed")
 ```
 
-
 # Separating Traits
 
 Each investigated SNP has an associated mapped trait, or multiple. Since
@@ -289,8 +298,10 @@ MAPPED_TRAIT and the URI that contain unique disease/trait ontology id
 in MAPPED_TRAIT_URI. Traits are comma separated but some trait names
 contain commas. To avoid error prone case by case exceptions, trait
 separation will be based on the URI and trait names will be cross mapped
-from the ontology.
-! TODO: Consider using MONDO since there was an update which uses MONDO IDs for existing traits insted of EFO so some EFO ids are obsolete.
+from the ontology. ! TODO: Consider using MONDO since there was an
+update which uses MONDO IDs for existing traits insted of EFO so some
+EFO ids are obsolete.
+
 ```{r}
 # Transforming loci in GRB to dataframe
 loci_in_GRBs.df <- mcols(loci_in_GRBs.gr) %>%
@@ -311,15 +322,19 @@ trait_ontology <-
 ```
 
 ## Downloading EFO ontology
-Downloading all EFO terms and saving it locally since this chunk is long.
+
+Downloading all EFO terms and saving it locally since this chunk is
+long.
+
 ```{r,eval=FALSE}
 efo_terms <- rols::terms("efo", pagesize = 10000)
 
 saveRDS(efo_terms, "data/EFO_terms.rds")
 ```
 
-Creating pairwise mappings of EFO ids with cross reference.
-*Do I need this here?*
+Creating pairwise mappings of EFO ids with cross reference. *Do I need
+this here?*
+
 ```{r, eval=FALSE}
 # Downloaded efo terms
 efo_terms <- readRDS("data/EFO_terms.rds")
@@ -360,9 +375,11 @@ write.csv(efo_mappings, file = "data/EFO_mappings.csv")
 ## Relabeling Traits
 
 Example of the URI that has to be separated:
-http://www.ebi.ac.uk/efo/EFO_0004318, http://www.ebi.ac.uk/efo/EFO_0007015
+<http://www.ebi.ac.uk/efo/EFO_0004318>,
+<http://www.ebi.ac.uk/efo/EFO_0007015>
+
 ```{r}
-# Loading ego_terms
+# Loading efo_terms
 efo_terms <- readRDS("data/EFO_terms.rds")
 
 loci_in_GRBs.df <-
@@ -389,58 +406,158 @@ loci_in_GRBs.df <-
   loci_in_GRBs.df %>%
   mutate(MAPPED_TRAIT = ifelse(str_detect(MAPPED_TRAIT,"obsolete_"),
                                str_remove(MAPPED_TRAIT, "obsolete_"), 
-                               MAPPED_TRAIT))
+                               MAPPED_TRAIT)) %>%
+  # Removing NA MAPPED_TRAIT
+  filter(!is.na(MAPPED_TRAIT))
   
 
 
-# write.csv(loci_in_GRBs.df, file = "data/loci_in_GRBs.df.csv")
+#write.csv(loci_in_GRBs.df, file = "data/loci_in_GRBs.df.csv")
+#saveRDS(loci_in_GRBs.df, file = "data/loci_in_GRBs.df.rds")
 # Making GRanges for the same dataframe, now separated
 loci_in_GRBs.gr <- grangesFromDataframe(loci_in_GRBs.df, LDblock)
-# saveRDS(loci_in_GRBs.gr, "data/loci_in_GRBs_gr.rds")
+# genome(loci_in_GRBs.gr) <- genome(BSgenome.Hsapiens.UCSC.hg19)
+# seqlevels(loci_in_GRBs.gr) <- seqlevels(BSgenome.Hsapiens.UCSC.hg19)
+# seqlengths(loci_in_GRBs.gr) <- seqlengths(BSgenome.Hsapiens.UCSC.hg19)
+#saveRDS(loci_in_GRBs.gr, "data/loci_in_GRBs.gr.rds")
 ```
 
-# byGRB_list 
-This object contains data about...
-Nije dovrseno....
+
+# SNPs in GRBs granges
+
+Building SNPs in GRB granges object. SNPs downloaded from GWAS catalog
+have coordinates but are mapped to hg38.
+## Loading data
+Using loci_in_grb.df object to extract all SNPs in GRBs
+```{r}
+loci_in_GRBs.df <- readRDS("data/loci_in_GRBs.df.rds")
+```
+
+Use annotations SNPlocs library. Returns a nice granges object but is missing around 2000 SNPs (out of ~ 50k)
+```{r, eval=FALSE}
+# Coercing to data frame because 
+# it makes a GPos object by default which makes bugs afterwards
+snps_in_GRBs.gr <- 
+  snpsById(SNPlocs.Hsapiens.dbSNP144.GRCh37, 
+           loci_in_GRBs.df$SNPS %>% unique(),
+           ifnotfound = "drop") %>%
+  as.data.frame() %>%
+  select(seqnames, pos, SNPS = "RefSNP_id")
+
+# Generating Granges 
+snps_in_GRBs.gr <- 
+  makeGRangesFromDataFrame(snps_in_GRBs.gr,
+                           seqnames.field = "seqnames",
+                           start.field = "pos",
+                           end.field ="pos",
+                           keep.extra.columns = TRUE)
+```
+
+Tried to query the SNPs with biomaRt but ended up with a weird error
+that i posted on [Biostars](https://www.biostars.org/p/9538506/#9538525)
+I gave up on biomaRt and used a combination of the annotation package and ensembls rest api for missing ones.
+```{r, eval=FALSE}
+library(httr)
+library(jsonlite)
+library(xml2)
+ 
+# Defining the url 
+server <- "http://grch37.rest.ensembl.org/variation/human/"
+# Example from the site
+ext <- "/variation/human/rs116035550?"
+
+# pulling the unique SNPS that where not found in previous chunk
+missing_snps_vec <- loci_in_GRBs.df %>%
+  filter(!is.element(SNPS, snps_in_GRBs.gr$SNPS)) %>% 
+  pull(SNPS) %>%
+  unique()
+
+# Preparing empty dataframe for for loop filling
+missing_snps <- data.frame(SNPS = character(), 
+                           SNP.coords = character()) 
+
+# using REST API to gather loci info per snp
+for(snp in missing_snps_vec){ 
+  # Recording progress 
+  if(which(snp == missing_snps_vec) %% 100 ==0){
+    print(paste(which(snp == missing_snps_vec), " snp: ", snp))}
+  
+  # Sending requests
+  r <- GET(paste(server, snp, "?", sep = ""),
+           content_type("application/json"))
+  # Catching errors
+  stop_for_status(r)
+  # Extracting genomic location information
+  snp_locs <- content(r)$mappings[[1]]$location
+  # Filling up the dataframe
+  missing_snps <- add_row(missing_snps,
+                          SNPS = snp,
+                          SNP.coords = snp_locs)
+}
+
+# Generating a granges
+missing_snps.gr <-
+  grangesFromDataframe(missing_snps, 
+                       colName = SNP.coords,
+                       keep_metadata =  TRUE)
+
+# Concetinating  to the final object
+snps_in_GRBs.gr <- c(snps_in_GRBs.gr, missing_snps.gr)
+# Changing type of seqnames from 1,2,3,... to chr1, chr2, chr3,...
+seqlevelsStyle(snps_in_GRBs.gr) <- "UCSC"
+# ?Maybe combine with loci_in_GRBs.df for extra metadata
+saveRDS(snps_in_GRBs.gr, file = "data/snps_in_GRBs.gr.rds")
+```
+
+```{r}
+snps_in_GRBs.gr <- readRDS("data/snps_in_GRBs.gr.rds")
+```
+
+
+# byGRB_list
+Write up .... 
 ## Loading data
 ```{r}
-loci_in_GRBs.gr <- readRDS( "data/loci_in_GRBs_gr.rds")
+loci_in_GRBs.gr <- readRDS( "data/loci_in_GRBs.gr.rds")
 
-# Downloaded from fantom5 site
-## ! 12.09. fantom5 data is processed in some way so i downloaded Anjas daat
-# fantom5.enhancers.tpm.gr <-
-#   read.csv("data/human_permissive_enhancers_phase_1_and_2_expression_tpm_matrix.txt",
-#            sep = "\t", header = TRUE) %>%
-#   grangesFromDataframe(colName = Id, keep_metadata = T)
+# Target genes for CNE density GRBs 
+target_genes <- 
+  read.csv("data/hg19.canFam3.tsv", sep = "\t", header = TRUE)  
 
+# Building target gene genomic ranges
+target_genes_gr <- grangesFromDataframe(target_genes, ucscCoordinates.hg19)
+
+# Sent by Anja by mail (from fantom5 data)
+TSSs.perTranscript.gr <- readRDS("data/TSSs.perTranscript.gr.rds")
 fantom5.enhancers.tpm.gr <- readRDS("data/fantom5.enhancers.tpm.pooled.gr.rds")
 promoter_cage_tpm_df <- readRDS("data/promoter_cage_tpm_df_fixed_pooled.rds")
 
 grbs <- import.bed("data/CNE_density_modf_kurtosis.bed")
 
-# list with gene ids
+# Adding target genes to GRBs
+grbs$targets <- ""
+for (i in 1:length(grbs)) {
+  t <- sort(subsetByOverlaps(target_genes_gr, grbs[i]))
+  if(length(t)>0) {
+    grbs$targets[i] <- paste(t$geneName, collapse=",")
+  }
+}
+
+# list with gene ids (Anja)
 genes.hg19.ensembl <- readRDS("data/genes.hg19.ensembl.rds")
 
-# Sent by Anja by mail (from fantom5 data)
-TSSs.perTranscript.gr <- readRDS("data/TSSs.perTranscript.gr.rds")
+gwas_associations <- readRDS("../01-LDblock_calculation/data/gwas_associations.rds")
+
+# Started building snps in GRB not fiinished!!
+snps_in_GRBs.gr <-
+  as.data.frame(mcols(loci_in_GRBs.gr)) %>%
+  left_join(dplyr::select(gwas_associations, SNPS, CHR_POS))
+ 
 ```
 
-Skip
-```{r, eval=FALSE}
-# TEsting downloading data
-library(biomaRt)
+## byGRB_list
 
-listEnsembl()
-ensembl <- useEnsembl("genes")
-searchDatasets(ensembl, pattern = "hsapiens")
-listEnsemblArchives()
-ensembl95 <- useEnsembl(biomart = 'genes', 
-                       dataset = 'hsapiens_gene_ensembl',
-                       version = "GRCh37")
-```
-
-
-## Building
+This works. Write up everything
 
 ```{r}
 # makes sure to work on the GRB level, even when one GRB covers multiple loci
@@ -488,23 +605,26 @@ for (i in 1:length(grb_subset)) {
   #                                    byGRB_list[[i]][[1]]$ens,                                                           loci.gr, 
   #                                    TSSs.perTranscript.gr)
 }
+
+# Last
+#saveRDS(byGRB_list, file = "data/byGRB_list.rds")
 ```
 
+### testing
+
+```{r, eval=FALSE}
+targPred_byGRB_list <- readRDS("../main/data/targPred_byGRB_list_wEnhancers_GeThesisTargets_FANTOM5.rds")
+
+# Different lengths and around 62 different GRB thresholds
+length(targPred_byGRB_list)
+length(byGRB_list)
+names(byGRB_list[!(names(byGRB_list) %in% names(targPred_byGRB_list))])
+
+## Checking if GRBs that Anja sent and mine are the same
+targPred_byGRB_list["chr2_29386917_30271314"]
+byGRB_list[["chr1_8177187_8910000"]]
 
 
-```{r}
-targPred_byGRB_list[["chr1_27234255_3358395"]]
-byGRB_list[["chr1_2723425_3358395"]]
-
-```
-# Plotting
-```{r}
-
-i <- 4
-plots_prom_expression_beanplot_per_locus(byGRB_list, i, 
-                                           neuronal=F, sign="permutation", 
-                                           dir="data/expression_pairs_dir",
-                                         file_suffix="_gene_expression_beanplot_perm_median.png")
 
 ```
 
