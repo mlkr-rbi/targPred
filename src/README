@@ -1,0 +1,8 @@
+To run all the steps of from GWAS data to plot creation do the following steps from the core:
+
+-core/
+  1) LD_Block_calculation.Rmd
+  2) GWAS_SNPs_inGRB.Rmd
+  3) Locus_summary_plots.Rmd
+  
+The data is stored on orthus storage directory

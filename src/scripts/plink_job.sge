@@ -1,0 +1,19 @@
+#!/bin/bash
+
+#$ -N ld_block_plink
+#$ -cwd
+#$ -m bae
+#$ -pe mpi 8
+#$ -M katarina.mandic@irb.hr
+
+SNPLIST=gwas_snps_new
+
+
+./plink --bfile 1kg_phase1/1kg_phase1_filt --r2 --ld-snp-list ${SNPLIST}.txt --ld-window-kb 6000 --ld-window 99999 --ld-window-r2 0.6 --noweb --out out/${SNPLIST} 
+
+
+spack load gcc@11.2.0
+spack load r@4.1.2
+
+Rscript process_plink.R ${SNPLIST}
+
