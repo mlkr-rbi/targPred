@@ -1,7 +1,0 @@
-#!/bin/bash
-
-#$ -N failedSnp
-#$ -cwd
-
-module load R
-R CMD BATCH ldproxy.R Rcodeoutput_failedSnp.txt
