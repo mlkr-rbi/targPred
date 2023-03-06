@@ -263,13 +263,18 @@ cne_density_grb_modf <-
   ungroup() %>%
   makeGRangesFromDataFrame(keep.extra.columns = TRUE)
 
-#saveRDS(cne_density_grb_modf, file = "data/GRBs_CNE_density_modf_kurtosis.rds")
+# saveRDS(cne_density_grb_modf, file = file.path(project_dir, processed_dir, "GRBs_CNE_density_modf_kurtosis.rds"))
 ```
 
 # Loci in GRBs
 
 *Anjas part* After preparing gwas_gr and cne_density_grb_modf subseting
 those SNPs that are in GRBs and storing in loci_inGRB.gr.
+
+```{r}
+cne_density_grb_modf <- readRDS(file.path(project_dir, processed_dir, "GRBs_CNE_density_modf_kurtosis.rds"))
+```
+
 
 ```{r}
 loci_in_GRBs.gr <- subsetByOverlaps(gwas_gr, cne_density_grb_modf)
@@ -336,7 +341,7 @@ trait_ontology <-
 
 Downloading all EFO terms and saving it locally since this chunk is
 long.
-
+(Now in script EfoOntology.R)
 ```{r,eval=FALSE}
 efo_terms <- rols::terms("efo", pagesize = 10000)
 
@@ -431,7 +436,9 @@ loci_in_GRBs.gr <- grangesFromDataframe(loci_in_GRBs.df, LDblock)
 # genome(loci_in_GRBs.gr) <- genome(BSgenome.Hsapiens.UCSC.hg19)
 # seqlevels(loci_in_GRBs.gr) <- seqlevels(BSgenome.Hsapiens.UCSC.hg19)
 # seqlengths(loci_in_GRBs.gr) <- seqlengths(BSgenome.Hsapiens.UCSC.hg19)
-saveRDS(loci_in_GRBs.gr, file.path(project_dir, processed_dir, "loci_in_GRBs.gr.rds"))
+
+
+# saveRDS(loci_in_GRBs.gr, file.path(project_dir, processed_dir, "loci_in_GRBs.gr.rds"))
 ```
 
 
@@ -519,7 +526,7 @@ snps_in_GRBs.gr <- c(snps_in_GRBs.gr, missing_snps.gr) %>%
 # Changing type of seqnames from 1,2,3,... to chr1, chr2, chr3,...
 seqlevelsStyle(snps_in_GRBs.gr) <- "UCSC"
 # ?Maybe combine with loci_in_GRBs.df for extra metadata
-saveRDS(snps_in_GRBs.gr, file = file.path(project_dir, processed_dir, "snps_in_GRBs.gr.rds"))
+# saveRDS(snps_in_GRBs.gr, file = file.path(project_dir, processed_dir, "snps_in_GRBs.gr.rds"))
 ```
 
 ```{r}

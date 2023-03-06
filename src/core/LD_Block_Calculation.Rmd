@@ -100,8 +100,8 @@ saveRDS(gwas_ancestry, file.path(project_dir, "data/gwas/gwas_catalog_2022/gwas_
 # Loading data
 Loading the previously downloaded data
 ```{r loading data 2021, eval=FALSE}
-gwas_associations <- readRDS(file.path(project_dir, "data/gwas/gwas_catalog_2021/gwas_associations.rds"))
-gwas_ancestry <- readRDS(file.path(project_dir, "data/gwas/gwas_catalog_2021/gwas_ancestry.rds"))
+gwas_associations <- readRDS(file.path(project_dir, "data/inputs/gwas_catalog_2021/gwas_associations.rds"))
+gwas_ancestry <- readRDS(file.path(project_dir, "data/inputs/gwas_catalog_2021/gwas_ancestry.rds"))
 ```
 Loading gwas 2022 data
 ```{r loading data 2022, eval=TRUE}

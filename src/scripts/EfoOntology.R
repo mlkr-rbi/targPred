@@ -2,9 +2,13 @@ library(rols)
 library(dplyr)
 library(stringr)
 
-# Downloading efo ontology 
 
-efo_terms <- terms("efo")
+
+# Downloading efo ontology 
+# 21.02. This is obsolete - using previously generated results
+efo_terms <- rols::terms("EFO", pagesize=1000)
+
+#
 
 
 # Creating pairwise mappings
@@ -33,5 +37,8 @@ for(i in 1:length(names(efo_terms@x))){
   efo_mappings <- rbind(efo_mappings, working_df)
 }
 
-saveRDS(efo_terms, "codingVariants/RDS/efo_terms.rds")
-saveRDS(efo_mappings, "codingVariants/RDS/efo_mappings.rds")
+#saveRDS(efo_terms, "codingVariants/RDS/efo_terms.rds")
+#saveRDS(efo_mappings, "codingVariants/RDS/efo_mappings.rds")
+
+
+

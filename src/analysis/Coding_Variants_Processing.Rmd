@@ -12,6 +12,14 @@ library(dplyr)
 library(vcfR)
 library(tidyr)
 library(rols)
+
+
+
+project_dir <- "/home/katarina/MyProjects/targPred"
+inputs_dir <- "data/inputs"
+processed_dir <- "data/processed"
+outputs_dir <- "/data/outputs"
+
 ```
 
 # gnomAD data download
@@ -87,7 +95,7 @@ INFO=<ID=AC,Number=A,Type=Integer,Description=“Alternate allele count for samp
 # VCF:Loading data
 Next we load the gnomad.vcf and converting the vcf format to a data frame.
 ```{r, eval=FALSE}
-gnomad_vcf <- read.vcfR("codingVariants/data/gnomad.vcf")
+gnomad_vcf <- read.vcfR( file.path(project_dir, inputs_dir, "coding_variant_data/gnomad.vcf"))
 
 # This call takes a long time
 vcf_df <- cbind(as.data.frame(getFIX(gnomad_vcf)), INFO2df(gnomad_vcf))
@@ -96,7 +104,7 @@ vcf_df$clinvarID <- str_split(vcf_df$ID, pattern = ";", simplify = TRUE)[,2]
 vcf_df$ID <- str_split(vcf_df$ID, pattern = ";", simplify = TRUE)[,1]
 vcf_df$gene <- str_split(vcf_df$GENEINFO, pattern = ":", simplify = TRUE)[,1]
 
-saveRDS(vcf_df, "codingVariants/RDS/gnomad_clinvar_df_raw.rds")
+saveRDS(vcf_df, file.path(project_dir, inputs_dir, "coding_variant_data/gnomad_clinvar_df_raw.rds"))
 rm(vcf_df)
 rm(gnomad_vcf)
 ```
@@ -116,7 +124,7 @@ rm(gnomad_vcf)
     
 
 ```{r}
-clnv <- readRDS("RDS/gnomad_clinvar_df_raw.rds") %>%
+clnv <- readRDS(file.path(project_dir, inputs_dir, "coding_variant_data/gnomad_clinvar_df_raw.rds")) %>%
   # This filter reduces number of rows for 200k 
   dplyr::filter(FILTER == "PASS" & !is.element(CLNDN, c(NA,"not_provided","not_specified", "not_specified|not_provided","	
 not_specified|not_provided"))) %>%
@@ -132,23 +140,23 @@ not_specified|not_provided"))) %>%
 
 
 ```{r, eval=FALSE}
-saveRDS(clnv, file="codingVariants/RDS/gnomad_clinvar_df_clean.rds")
+saveRDS(clnv, file=file.path(project_dir, inputs_dir, "coding_variant_data/gnomad_clinvar_df_clean.rds"))
 #write.table(clnv, file = "codingVariants/output/clinVar.xlsx")
 ```
-
+  
 
 # Ontolgy:Loading
 Loading working objects:
 efo_mappings whcih contains pairs of efo_ids and corresponding cross-ref. 
-efo_terms which is a list of Terms - object from the rols library. It contains all efo ids.
+<!-- efo_terms which is a list of Terms - object from the rols library. It contains all efo ids. -->
 clnv is the object which stores coding SNPs from gnomad with matching clinvar disease annotations.
 ```{r}
 # Dataframe of paired efo_id and crossrefrence with labels
-efo_mappings <- readRDS("RDS/efo_mappings.rds")
+efo_mappings <- readRDS(file.path(project_dir, processed_dir, "efo_mappings.rds"))
 # list of Terms (rols object)
-efo_terms <- readRDS("RDS/efo_terms.rds")
+# efo_terms <- readRDS("RDS/efo_terms.rds")
 # Snps deposited in gnomad and annotated in clinvar
-clnv <- readRDS("RDS/gnomad_clinvar_df_clean.rds")
+clnv <- readRDS(file.path(project_dir, inputs_dir, "coding_variant_data/gnomad_clinvar_df_clean.rds"))
 ```
 
 
@@ -167,9 +175,9 @@ table(str_detect(clnv$CLNDISDB, pattern = "Orphanet"))
 
 # How many of the database contain MONDO mappings
 clnv %>%
-  select(CLNDISDB, CLNDN)%>%
+  dplyr::select(CLNDISDB, CLNDN)%>%
   filter(str_detect(CLNDISDB, pattern = "MONDO")) %>%
-  select(CLNDN) %>%
+  dplyr::select(CLNDN) %>%
   table() %>%
   as.data.frame() %>%
   arrange(desc(Freq))
@@ -187,9 +195,9 @@ message("MedGen encoded disease in out of unique terms:")
 table(str_detect(unique(clnv$CLNDISDB), pattern = "MedGen"))
 
 
-# How many unique terms that have MONDO mappings
+# How many unique terms that DO NOT have MONDO mappings
 clnv %>%
-  select(CLNDISDB, CLNDN)%>%
+  dplyr::select(CLNDISDB, CLNDN)%>%
   filter(!str_detect(CLNDISDB, pattern = "MONDO"))%>%
   unique()
 
@@ -211,7 +219,7 @@ MONDO:MONDO:0014052,MedGen:C3808739,OMIM:615120
 ```{r}
 clnv_terms <-
   clnv%>%
-  select(CLNDISDB, CLNDN) %>%
+  dplyr::select(CLNDISDB, CLNDN) %>%
   unique() %>%
   # Separatig rows by ontology ids, disease names are contained
   separate_rows(CLNDISDB, sep =",")
@@ -265,26 +273,26 @@ table(is.element(clnv_terms$CLN_diseaseID, efo_mappings$id1) & str_detect(clnv_t
 ```{r}
 clnv <-
   clnv %>%
-  left_join( select(filter(clnv_terms, str_detect(CLN_diseaseID, pattern="MONDO")),
+  left_join( dplyr::select(filter(clnv_terms, str_detect(CLN_diseaseID, pattern="MONDO")),
                     CLNDN,
                     MONDO_ID = CLN_diseaseID)) %>%
   mutate(gene = str_split(GENEINFO, pattern = ":", simplify = TRUE)[,1])
 
-saveRDS
+
 
 # these do not have MONDO ID's, figure what to do with them  
 filter(clnv, is.na(MONDO_ID))
-
-  clnv %>%
-  left_join( clnv_terms, by = "CLNDN") %>%
-  mutate(gene = str_split(GENEINFO, pattern = ":", simplify = TRUE)[,1])
+# 
+#   clnv %>%
+#   left_join( clnv_terms, by = "CLNDN") %>%
+#   mutate(gene = str_split(GENEINFO, pattern = ":", simplify = TRUE)[,1])
 
 
 ```
 
 ```{r, eval=FALSE}
-saveRDS(clnv, file="RDS/clinVar.rds")
-write.table(clnv, file = "output/clinVar.xlsx")
+saveRDS(clnv, file= file.path(project_dir, processed_dir, "clinVar.rds"))
+write.table(clnv, file = file.path(project_dir, outputs_dir, "clinVar.xlsx"))
 ```
 
 
@@ -293,14 +301,17 @@ We add affected gene info that is associated with a disease.
 
 ## GWAS:Loading
 ```{r}
-loci_in_GRBs <- read.csv("data/loci_in_GRBs.df.csv")
+loci_in_GRBs <- readRDS(file.path(project_dir, processed_dir, "loci_in_GRBs.df.rds"))
+efo_terms <- readRDS(file.path(project_dir, inputs_dir, "EFO_terms.rds"))
+efo_mappings <- readRDS(file.path(project_dir, processed_dir, "efo_mappings.rds"))
 ```
 
 Adding MONDO ids in a separate column in gwas_grb dataset.
 1. Adding cross refed MONDO ids that are stored in efo_mappings id2
 2. Adding MONDO ids that are part of EFO and are stored in efo_mappings id1
 ```{r}
-loci_in_GRBs <-
+
+loci_in_GRBs_clnv <-
   loci_in_GRBs %>%
   # Adding MONDO cross-ref ids into a column
   left_join(filter(efo_mappings, str_detect(id2, "MONDO")), 
@@ -309,10 +320,10 @@ loci_in_GRBs <-
   select(-label)
 
 # Changing the colname to something appropriate
-names(loci_in_GRBs)[names(loci_in_GRBs)=="id2"] <- "MONDO_ID"
+names(loci_in_GRBs_clnv)[names(loci_in_GRBs_clnv)=="id2"] <- "MONDO_ID"
 
-loci_in_GRBs <-
-  loci_in_GRBs %>%
+loci_in_GRBs_clnv <-
+  loci_in_GRBs_clnv %>%
   # Copying MONDO ids from EFO
   mutate(MONDO_ID = ifelse(is.na(MONDO_ID) & str_detect(MAPPED_TRAIT_ID, "MONDO"), MAPPED_TRAIT_ID, MONDO_ID))
 
@@ -320,14 +331,14 @@ loci_in_GRBs <-
 
 ### Exploration
 ```{r, eval=FALSE}
-View(as.data.frame(table(filter(gwas_grb, is.na(id2))$MAPPED_TRAIT)))
+View(as.data.frame(table(filter(loci_in_GRBs_clnv, is.na(MONDO_ID))$MAPPED_TRAIT)))
 
 
-filter(gwas_grb, !is.na(id2))
+filter(loci_in_GRBs_clnv, !is.na(MONDO_ID))
 ```
 
 ## Clinvar genes to gwas
-First storing disease - gene association into a separate dataframe also concatinating genes to a single row per disease.
+First storing disease - gene association into a separate data frame also concatenating genes to a single row per disease.
 This is the main information acquired from clinvar
 ```{r}
 # clinvar disease gene associations
@@ -341,10 +352,10 @@ clnv_disease_gene <-
   filter(!is.na(MONDO_ID))
 
 gwas_grb_clnv <- 
-  left_join(loci_in_GRBs, clnv_disease_gene) %>%
-  dplyr::select(-X)
+  left_join(loci_in_GRBs_clnv, clnv_disease_gene)
+  # dplyr::select(-X)
 
-write_csv(gwas_grb_clnv, "output/loci_in_GRBs_clnv.csv") 
+# write.csv(gwas_grb_clnv, file = file.path(project_dir, outputs_dir, "loci_in_GRBs_clnv.csv"))
 ```
 
 
