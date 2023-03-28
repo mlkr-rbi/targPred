@@ -10,6 +10,7 @@ Insert the description of the notebook here.
 ```{r Libraries, message=FALSE}
 library(GenomicRanges)
 library(plyranges)
+library(ggpubr)
 library(tidyverse)
 
 
@@ -25,7 +26,8 @@ source(file.path(project_dir, "src/scripts/utils.R"))
 ```{r}
 # This is output from the EP exploration nb
 enhancer_transcript_df <- readRDS(file.path(project_dir, processed_dir, "by_GRB_list_enh_trans_df.rds"))
-loci_in_GRB <- readRDS(file = file.path(project_dir, processed_dir, "loci_in_GRBs.gr.rds"))
+loci_in_GRBs.gr <- readRDS(file = file.path(project_dir, processed_dir, "loci_in_GRBs_LDproxy.gr.rds"))
+loci_in_GRBs <- readRDS(file = file.path(project_dir, processed_dir, "loci_in_GRBs_LDproxy.df.rds"))
 ```
 
 
@@ -35,60 +37,29 @@ enhancer_transcript_gr <- grangesFromDataframe(enhancer_transcript_df, enh, keep
 
 ```{r}
 # Overlapping enhancers with LD blocks
-loci_enh_op <- join_overlap_left(loci_in_GRB, enhancer_transcript_gr)
+loci_enh_op <- join_overlap_left(loci_in_GRBs.gr, enhancer_transcript_gr)
 loci_enh_op <- as.data.frame(mcols(loci_enh_op))
 
 loci_enh_op
 ```
 
-
+Mean values of significant E-P interactions per trait.
 ```{r}
-temp <- loci_enh_op %>%
+trait_mean_enh_range <- loci_enh_op %>%
   filter(!is.na(enh)) %>%
   #signf long range
-  filter(emp < 0.001 & enh_trans_range > 100000)
-
-as.data.frame(table(temp$MAPPED_TRAIT)) %>% arrange(desc(Freq))
-
-filter(temp, symbol == GRB_GENES) %>%
-  pull(MAPPED_TRAIT) %>%
-  table() %>%
-  as.data.frame() %>%
-  arrange(desc(Freq))
-
-
-filter(temp, symbol == GWAS_GENES) %>%
-  pull(MAPPED_TRAIT) %>%
-  table() %>%
-  as.data.frame() %>%
-  arrange(desc(Freq))
-
-temp <- loci_enh_op %>%
-  filter(!is.na(enh)) %>%
-  #signf long range
-  filter(emp < 0.001)
-
-temp %>%
-  # filter(MAPPED_TRAIT == "bitter non-alcoholic beverage consumption measurement") %>%
+  # filter(emp < 0.001) %>%
   select(SNPS, enh, emp, MAPPED_TRAIT, enh_trans_range, symbol, ensembl, GWAS_GENES) %>%
   unique() %>%
   group_by(MAPPED_TRAIT) %>%
   summarise(mean = mean(enh_trans_range),
-            count = n(),
+            count = dplyr::n(),
             genes_symbol = paste0(unique(symbol), collapse = ", "),
             genes_ensembl = paste0(unique(ensembl), collapse = ", "),
             GWAS_sum = paste0(unique(GWAS_GENES), collapse = ", "),
             jaccard = ProportionOfGenesShared(symbol, str_split(GWAS_sum, pattern = ", ",simplify = TRUE)[1,])) %>%
-  as.data.frame() %>%
-  View()
+  as.data.frame()
 
-
-temp %>%
-  select(SNPS, enh, emp, MAPPED_TRAIT, enh_trans_range) %>%
-  unique() %>%
-  group_by(MAPPED_TRAIT) %>%
-  as.data.frame() %>%
-  View()
 ```
 
 
@@ -107,6 +78,266 @@ hist(temp$mean, breaks = 40)
 
 ggplot(data_, aes(x=grb, y=enh_num_4gene)) +
   geom_point()
+
+
+
+
+```
+
+
+Mean vs jaccard
+```{r}
+data_ <- trait_mean_enh_range %>%
+  filter(count > 10) %>%
+  select(mean, jaccard)
+
+ggplot(data_, aes(x=mean, y=jaccard)) +
+  geom_point()+
+  stat_density_2d()
+
+
+# hist(trait_mean_enh_range$count, breaks = 6000, xlim = c(0,100), ylim = c(0,3000))
+```
+
+
+# Enh-P interaction range background
+## Loading
+```{r}
+chr_vec <- paste0("chr", c(1:22)) %>%
+  append("chrX")
+grbs <- readRDS(file.path(project_dir, processed_dir, "GRBs_CNE_density_modf_kurtosis.rds"))
+transcripts <- readRDS(file.path(project_dir, processed_dir,  "TSSs.perTranscript.gr.rds"))
+
+# Is transcript in GRB 
+transcripts$TinGRB <- FALSE
+transcripts[(transcripts %in% subsetByOverlaps(transcripts, grbs))]$TinGRB <- TRUE
+
+trans_range <- data.frame(gene = str_c(transcripts$ensembl_gene_id, transcripts$ensembl_transcript_id, sep = ":"),
+                          transcript_position = start(transcripts),
+                          TinGRB = transcripts$TinGRB)
+rm(transcripts)
+```
+
+
+## Per chromosome
+Each empP_gr file is separated by chromosome. Adding distance between *start of enhancer* and *start of transcript* in metacolumn of gr object. Adding flags if enhancer is in GRB. Saving each chromosome into a new version with distances and flags.
+```{r}
+for(chr in chr_vec){
+  
+  empP_gr <- load_per_chr_empP_file(chr, emp_dir = file.path(project_dir, processed_dir, "empP_files"))
+  mcols(empP_gr) <- left_join(as.data.frame(mcols(empP_gr)), trans_range, by="gene") 
+  empP_gr$EP_dist <- abs(start(empP_gr) - empP_gr$transcript_position)
+
+  empP_gr$EinGRB <- FALSE
+  empP_gr[(empP_gr %in% subsetByOverlaps(empP_gr, grbs))]$EinGRB <- TRUE
+  saveRDS(empP_gr, file = file.path(project_dir, outputs_dir, "empP_EP_distance", paste0(chr, "empP_CAGEenhPermissive_hg19Ens_6.4Mb_with_distances")))
+}
+```
+
+
+
+Plotting distances across chromosome. Trying out different combinations.
+## Eout - Pany vs Ein - Pany
+```{r}
+dir_name <- "Eout-Pany_vs_Ein-Pany"
+
+for(chr in chr_vec){
+  
+  empP_gr <- readRDS(file = file.path(project_dir, outputs_dir, "empP_EP_distance", paste0(chr, "empP_CAGEenhPermissive_hg19Ens_6.4Mb_with_distances")))
+  
+  
+  data_ <- mcols(empP_gr) %>%
+    as.data.frame() %>%
+    dplyr::filter(empP < 0.001) 
+
+ggplot(data_, aes(x = as.numeric(transcript_position), y = EP_dist, color = EinGRB)) +
+  geom_point(alpha = 0.5) +
+  scale_y_continuous(labels=fancy_scientific) +
+  scale_x_continuous(labels=fancy_scientific) +
+  theme_bw() + 
+  scale_color_manual(values =c("gray30", "darkred"), )
+ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", dir_name, paste0(chr, "_EP_distance_across_chromosome.png")))
+
+ggplot(data_, aes(x=EinGRB, y=EP_dist, fill = EinGRB)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("gray30", "darkred")) +
+  theme_bw()+ 
+  scale_y_continuous(labels=fancy_scientific) +
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", linewidth = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", linewidth = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test")
+ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", dir_name,  paste0(chr, "_EP_distance_boxplot.png")), bg = "white")
+
+  
+  data_ <- ranges(filter(empP_gr, empP < 0.001) ) %>% table()  %>% as.data.frame()
+  ggplot(data = data_, aes(x = Freq)) +
+    geom_histogram(bins=50, color = "black", fill = "darkred", alpha = 0.4) + 
+    theme_bw() +
+    ggtitle("Number of signif(<0.001) interactions per E")
+  ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", dir_name, paste0(chr, "_EP_freq_per_enh_distribution.png")))
+}
+```
+
+
+## Ein-Pin vs Ein-Pout
+```{r}
+dir_name <- "Ein-Pin_vs_Ein-Pout"
+
+for(chr in chr_vec){
+  
+  empP_gr <- readRDS(file = file.path(project_dir, outputs_dir, "empP_EP_distance", paste0(chr, "empP_CAGEenhPermissive_hg19Ens_6.4Mb_with_distances")))
+  
+  
+  data_ <- mcols(empP_gr) %>%
+    as.data.frame() %>%
+    dplyr::filter(empP < 0.001) %>%
+    filter((EinGRB & TinGRB) | (EinGRB & !TinGRB))
+
+ggplot(data_, aes(x = as.numeric(transcript_position), y = EP_dist, color = TinGRB)) +
+  geom_point(alpha = 0.5) +
+  scale_y_continuous(labels=fancy_scientific) +
+  scale_x_continuous(labels=fancy_scientific) +
+  theme_bw() + 
+  scale_color_manual(values =c("gray30", "darkred"), )
+ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", dir_name, paste0(chr, "_EP_distance_across_chromosome.png")))
+
+ggplot(data_, aes(x=TinGRB, y=EP_dist, fill = TinGRB)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("gray30", "darkred")) +
+  theme_bw()+ 
+  scale_y_continuous(labels=fancy_scientific) +
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", linewidth = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", linewidth = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test")
+ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", dir_name,  paste0(chr, "_EP_distance_boxplot.png")), bg = "white")
+
+  
+  # data_ <- ranges(filter(empP_gr, empP < 0.001)) %>% table()  %>% as.data.frame()
+  # ggplot(data = data_, aes(x = Freq)) +
+  #   geom_histogram(bins=50, color = "black", fill = "darkred", alpha = 0.4) + 
+  #   theme_bw() +
+  #   ggtitle("Number of signif(<0.001) interactions per E")
+  # ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", dir_name, paste0(chr, "_EP_freq_per_enh_distribution.png")))
+}
+```
+
+
+## Eany-Pin vs Eany-Pout
+```{r}
+dir_name <- "Eany-Pin_vs_Eany-Pout"
+
+for(chr in chr_vec){
+  
+  empP_gr <- readRDS(file = file.path(project_dir, outputs_dir, "empP_EP_distance", paste0(chr, "empP_CAGEenhPermissive_hg19Ens_6.4Mb_with_distances")))
+  
+  
+  data_ <- mcols(empP_gr) %>%
+    as.data.frame() %>%
+    dplyr::filter(empP < 0.001)
+
+ggplot(data_, aes(x = as.numeric(transcript_position), y = EP_dist, color = TinGRB)) +
+  geom_point(alpha = 0.5) +
+  scale_y_continuous(labels=fancy_scientific) +
+  scale_x_continuous(labels=fancy_scientific) +
+  theme_bw() + 
+  scale_color_manual(values =c("gray30", "darkred"), )
+ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", dir_name, paste0(chr, "_EP_distance_across_chromosome.png")))
+
+ggplot(data_, aes(x=TinGRB, y=EP_dist, fill = TinGRB)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("gray30", "darkred")) +
+  theme_bw()+ 
+  scale_y_continuous(labels=fancy_scientific) +
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", linewidth = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", linewidth = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test")
+ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", dir_name,  paste0(chr, "_EP_distance_boxplot.png")), bg = "white")
+
+  
+  # data_ <- ranges(filter(empP_gr, empP < 0.001)) %>% table()  %>% as.data.frame()
+  # ggplot(data = data_, aes(x = Freq)) +
+  #   geom_histogram(bins=50, color = "black", fill = "darkred", alpha = 0.4) + 
+  #   theme_bw() +
+  #   ggtitle("Number of signif(<0.001) interactions per E")
+  # ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", dir_name, paste0(chr, "_EP_freq_per_enh_distribution.png")))
+}
+```
+
+## Genome-wide EP dist
+```{r}
+genome_EP_distance <- data.frame()
+
+
+for(chr in chr_vec){
+  
+  empP_gr <- readRDS(file = file.path(project_dir, outputs_dir, "empP_EP_distance", paste0(chr, "empP_CAGEenhPermissive_hg19Ens_6.4Mb_with_distances")))
+  
+  dir <- "plots_EP_dist_0001_"
+  
+  data_ <- mcols(empP_gr) %>%
+  as.data.frame() %>%
+  dplyr::filter(empP < 0.0001)
+
+  genome_EP_distance <- rbind(genome_EP_distance, data_)
+
+  
+ggplot(data_, aes(x = as.numeric(transcript_position), y = EP_dist, color = inGRB)) +
+  geom_point() +
+  scale_y_continuous() +
+  theme_classic() + 
+  scale_color_manual(values =c("gray30", "darkred"))
+# ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", paste0(chr, "_EP_distance_across_chromosome.png")))
+
+ggplot(data_, aes(x=inGRB, y=EP_dist, fill = inGRB)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("gray30", "darkred")) +
+  theme_minimal()+ 
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", linewidth = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", linewidth = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "t.test")
+# ggsave(filename = file.path(project_dir, outputs_dir, "empP_EP_distance", paste0(chr, "_EP_distance_boxplot.png")), bg = "white")
+  
+}
+```
+
+
+Not sorted by chromosome
+```{r}
+
+ggplot(genome_EP_distance, aes(x=inGRB, y=EP_dist, fill = inGRB)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("gray30", "darkred")) +
+  theme_minimal()+
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", linewidth = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", linewidth = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test")
+```
+
+```{r}
+genome_ep_dists <- genome_EP_distance %>%
+  filter(inGRB == FALSE) %>%
+  pull(EP_dist)
+enh_dist_p <- c()
+
+median(genome_ep_dists)
+for(trait in unique(trait_mean_enh_range$MAPPED_TRAIT)){
+  pheno_ep_dists <- loci_enh_op %>%
+    filter(MAPPED_TRAIT == trait ) %>%
+    filter(emp < 0.001) %>%
+    pull(enh_trans_range)
+  if(length(pheno_ep_dists) < 5){
+    enh_dist_p <- c(enh_dist_p, "not enough observations")
+    next}
+  enh_dist_p <- c(enh_dist_p, t.test(pheno_ep_dists, genome_ep_dists, alternative = "greater")$p.value)
+  
+}
+
+trait_mean_enh_range$enh_dist_p <- enh_dist_p
 ```
 
 

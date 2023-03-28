@@ -13,6 +13,59 @@ assemblies <- c("canFam3", "mm10", "monDom5", "galGal4", "lepOcu1", "danRer7", "
 
 palette_primary_desktop <- c("#4E7CD9", "#153259", "#285911", "#D9A60D", "#D93425")
 
+
+fancy_scientific <- function(l) {
+  # turn in to character string in scientific notation
+  l <- format(l, scientific = TRUE)
+  # quote the part before the exponent to keep all the digits
+  l <- gsub("^(.*)e", "'\\1'e", l)
+  # turn the 'e+' into plotmath format
+  l <- gsub("e", "%*%10^", l)
+  # return this as an expression
+  parse(text=l)
+}
+
+give.n <- function(x){
+  return(c(y = -0.5, label = length(x))) 
+  # experiment with the multiplier to find the perfect position
+}
+
+ProportionOfGenesShared <- function(set1, set2){
+  union_set <- union(set1,  set2)
+  inters_set <- intersect(set1, set2)
+  if(any(is.element(inters_set, union_set))){
+    # return(table(is.element(inters_set, union_set))[[TRUE]]/length(union_set))}
+    return(length(inters_set)/length(union_set))}
+  else{return(0)}
+  
+}
+
+GeneSetProportionMatrix <- function(x, exclude_set=0){
+  # First col contains phenotype
+  # Second col contains comma separated genes
+  n <- nrow(x)
+  len_vec <- c()
+  
+  gene_vec <- list()
+  for(i in 1:n){
+    gene_vec <- append(gene_vec, str_split(x[i,2], pattern = ", "))
+    len_vec <- append(len_vec, length(gene_vec[[length(gene_vec)]]))
+  }
+  prop_matx <- matrix(nrow = n, ncol = n)
+  for(i in c(1:n)){
+    for(j in c(1:n)){
+      prop_matx[i,j] <- ProportionOfGenesShared(gene_vec[[i]], gene_vec[[j]])
+    }
+  }
+  # print(gene_vec)
+  # print(len_vec)
+  rownames(prop_matx) <- data.frame(x)[,1]
+  
+  prop_matx <- prop_matx[(len_vec > exclude_set),(len_vec > exclude_set) ]
+  return(prop_matx)
+}
+
+
 # Making granges from dataframe
 grangesFromDataframe <- function(data, colName, keep_metadata=TRUE){
   # Description: make granges from data frame
@@ -39,6 +92,44 @@ grangesFromDataframe <- function(data, colName, keep_metadata=TRUE){
   
   
   return(data_r)
+}
+
+# Make BED file from granges with a name column
+makeBed <- function(gr, name = FALSE, filename, 
+                    includetrackname = FALSE, 
+                    track_name ="My Track", 
+                    track_description = "My description",
+                    # since bed is 0 based and granges is 1 based
+                    modify_start = 0){
+  
+  
+  if(length(name) == 1 && name == FALSE){
+    name <- c(rep(".", length(gr)))
+  }
+  else if(any(name=="")){
+    message("Empty strings are not allowed, replacing them with NA")
+    name <- base::replace(name, name == "", NA)
+  }
+  
+  df <- data.frame(seqnames=seqnames(gr),
+                   # Do not need to lessen it by one since when importing bed file it was increased
+                   # starts=start(grb)-1,
+                   starts=start(gr) + modify_start,
+                   ends=end(gr),
+                   names=name,
+                   scores=c(rep(0, length(gr))),
+                   strands=c(rep(".", length(gr))))
+  
+  write.table(df, quote=F, sep="\t", row.names=F, col.names=F, 
+              file = filename)
+  
+  if(includetrackname){
+    track_full = paste("track name=\"", track_name, "\" description=\"", track_description, "\" itemRgb=\"On\"")
+    con <- file(filename, open="wt")
+    writeLines(track_full, con)
+    write.table(df, quote=F, sep="\t", row.names=F, col.names=F, file = con)
+    close(con)
+      }
 }
 
 

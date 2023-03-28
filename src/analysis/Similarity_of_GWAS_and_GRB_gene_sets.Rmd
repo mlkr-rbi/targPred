@@ -16,6 +16,8 @@ project_dir <- "/home/katarina/MyProjects/targPred"
 inputs_dir <- "data/inputs"
 processed_dir <- "data/processed"
 outputs_dir <- "/data/outputs"
+
+source(file.path(project_dir, "src/scripts/utils.R"))
 ```
 # Loading data
 ```{r}
@@ -63,43 +65,7 @@ grb_phenotype_gene_set <-
 ```
 
 # Functions for gene set proportions
-```{r}
-ProportionOfGenesShared <- function(set1, set2){
-  union_set <- union(set1,  set2)
-  inters_set <- intersect(set1, set2)
-  if(any(is.element(inters_set, union_set))){
-    # return(table(is.element(inters_set, union_set))[[TRUE]]/length(union_set))}
-    return(length(inters_set)/length(union_set))}
-  else{return(0)}
-  
-}
-
-GeneSetProportionMatrix <- function(x, exclude_set=0){
-  # First col contains phenotype
-  # Second col contains comma separated genes
-  n <- nrow(x)
-  len_vec <- c()
-  
-  gene_vec <- list()
-  for(i in 1:n){
-    gene_vec <- append(gene_vec, str_split(x[i,2], pattern = ", "))
-    len_vec <- append(len_vec, length(gene_vec[[length(gene_vec)]]))
-  }
-  prop_matx <- matrix(nrow = n, ncol = n)
-  for(i in c(1:n)){
-    for(j in c(1:n)){
-      prop_matx[i,j] <- ProportionOfGenesShared(gene_vec[[i]], gene_vec[[j]])
-    }
-  }
-  # print(gene_vec)
-  # print(len_vec)
-  rownames(prop_matx) <- data.frame(x)[,1]
-  
-  prop_matx <- prop_matx[(len_vec > exclude_set),(len_vec > exclude_set) ]
-  return(prop_matx)
-}
-
-```
+Functions ProportionOfGenesShared and GeneSetProportionMatrix is tranasfered in utils script
 
 
 # Running gene set proportions

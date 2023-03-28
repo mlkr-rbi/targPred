@@ -1,6 +1,8 @@
 ---
 title: "targPred EP exploration"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 # Description
@@ -14,6 +16,7 @@ library(dplyr)
 library(stringr)
 library(tibble)
 library(ggplot2)
+library(ggpubr)
 
 project_dir <- "/home/katarina/MyProjects/targPred"
 inputs_dir <- "data/inputs"
@@ -46,7 +49,9 @@ elements:
 
 ```{r}
 # by_GRB_list provided by Anja - mail
-by_GRB_list <- readRDS (file.path(project_dir, inputs_dir, "targPred_byGRB_list_wEnhancers_GeThesisTargets_FANTOM5.rds"))
+# I am commenting this 22.03. and switching to Dalibors plink version of gwas 2021
+by_GRB_list <- readRDS(file.path(project_dir, inputs_dir, "targPred_byGRB_list_wEnhancers_GeThesisTargets_FANTOM5.rds"))
+by_GRB_list <- readRDS(file.path(project_dir, processed_dir, "byGRB_list.rds"))
 
 # enhancer_transcript_df with ranges, Provided by Filip - mail
 enh_trans_ranges <- readRDS(file = file.path(project_dir, inputs_dir, "enh_trans_ranges.rds"))
@@ -229,7 +234,7 @@ enhancer_transcript_df <- enhancer_transcript_df %>%
   mutate(gene_num_4enh = ifelse(is.na(gene_num_4enh), 0, gene_num_4enh),
          enh_num_4gene = ifelse(is.na(enh_num_4gene), 0, enh_num_4gene))
 
-# saveRDS(enhancer_transcript_df, file.path(project_dir, processed_dir, "by_GRB_list_enh_trans_df.rds"))
+saveRDS(enhancer_transcript_df, file.path(project_dir, processed_dir, "by_GRB_list_enh_trans_df.rds"))
 ```
 
 
@@ -340,12 +345,13 @@ per_transcript <- per_transcript %>%
 
 ggplot(per_transcript, aes(x=target_gene, y=enh_num_4gene, fill = target_gene)) +
   geom_boxplot() +
-  coord_cartesian(ylim = c(0,20))+ 
+  coord_cartesian(ylim = c(0,20))+
   scale_fill_manual(values = c("black", "darkred")) +
   theme_minimal()+ 
   stat_summary(fun.data = give.n, geom = "text")+
   stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
-  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test", label.y.npc = 0.1, label.x.npc = "center", method.args = list(alternative = "greater"))
 ```
 
 
@@ -396,7 +402,8 @@ ggplot(per_gene, aes(x=target_gene, y=enh_num_4gene, fill = target_gene)) +
   theme_minimal()+ 
   stat_summary(fun.data = give.n, geom = "text")+
   stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
-  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test", label.y.npc = 0.1, label.x.npc = "center", method.args = list(alternative = "greater"))
 ```
 
 ### t test
@@ -555,7 +562,8 @@ ggplot(enhancer_transcript_df_sub, aes(x=target_gene, y=enh_num_4gene_binned,fil
   scale_fill_manual(values = c("black", "darkred"))+
   stat_summary(fun.data = give.n, geom = "text")+
   stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
-  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)+
+  stat_compare_means(method = "wilcox.test", label.y.npc = 0.2, label.x.npc = "left", method.args =list(alternative = "greater"))
 ```
 ### t test 
 ```{r}
@@ -563,7 +571,7 @@ for(i in enhancer_transcript_df_sub$ranges_binned %>% unique() %>% sort){
   x = filter(enhancer_transcript_df_sub, ranges_binned == i & target_gene == "No")$enh_num_4gene_binned
   y = filter(enhancer_transcript_df_sub, ranges_binned == i & target_gene == "Yes")$enh_num_4gene_binned
   print(paste("Interval", i))
-  print(t.test(x,y))
+  print(wilcox.test(x,y, alternative = "greater"))
 }
 ```
 ## Cumulative EP count-dist-cat
@@ -630,7 +638,8 @@ ggplot(enhtrans_sub, aes(x=target_gene, y=cm_enh_num_4gene,fill=target_gene))+
   scale_fill_manual(values = c("black", "darkred"))+
   stat_summary(fun.data = give.n, geom = "text")+
   stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
-  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test", label.y.npc = 0.15, label.x.npc = "left", method.args = list(alternative = "greater"))
 ```
 
 ### t test
@@ -639,7 +648,7 @@ for(i in enhancer_transcript_df$ranges_binned %>% unique() %>% sort){
   x = filter(enhtrans_sub, ranges_binned == i & target_gene == "No")$cm_enh_num_4gene
   y = filter(enhtrans_sub, ranges_binned == i & target_gene == "Yes")$cm_enh_num_4gene
   print(paste("Interval", i))
-  print(t.test(x,y))
+  print(t.test(x,y, alternative = "less"))
 }
 ```
 
