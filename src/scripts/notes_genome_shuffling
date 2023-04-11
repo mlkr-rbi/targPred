@@ -1,0 +1,39 @@
+# Genome shuffling step by step
+
+## Downloaded bedtools by following link
+https://bedtools.readthedocs.io/en/latest/content/installation.html 
+
+wget https://github.com/arq5x/bedtools2/releases/download/v2.30.0/bedtools.static.binary
+mv bedtools.static.binary bedtools
+chmod a+x bedtools
+
+## For the shuffling function I need chromosome lenghts
+wget https://genome.ucsc.edu/goldenpath/help/hg19.chrom.sizes
+
+## Trying out different approaches to shuffling. I need a way to shuffle them, not to be overlapping grbs and not to overlap eachother. 
+## Trying the -f feature - maximum overlap
+./bedtools shuffle -i /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -g hg19.chrom.sizes -excl /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -noOverlapping -f 1000 > shuffled_beds/galgal_excl_test1.bed
+
+./bedtools shuffle -i /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -g hg19.chrom.sizes -excl /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -noOverlapping -f 100 > shuffled_beds/galgal_excl_test2.bed
+
+
+./bedtools shuffle -i /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -g hg19.chrom.sizes -excl /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -noOverlapping -f 1 > shuffled_beds/galgal_excl_test4.bed
+
+
+./bedtools shuffle -i /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -g hg19.chrom.sizes -excl /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -noOverlapping -f 0.5 > shuffled_beds/galgal_excl_test5.bed
+
+./bedtools shuffle -i /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -g hg19.chrom.sizes -excl /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -noOverlapping -f 0.1 > shuffled_beds/galgal_excl_test6.bed
+
+
+## THIS one doesn't work
+./bedtools shuffle -i /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -g hg19.chrom.sizes -excl /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -noOverlapping -f 0.01 > shuffled_beds/galgal_excl_test7.bed
+
+./bedtools shuffle -i /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -g hg19.chrom.sizes -excl /storage/PROJECTS/targPred/GRB/GRB_thresholds_beds/hg19.galGal4.70.50.processed.threshold.grbs.bed -noOverlapping -f 0.05 > shuffled_beds/galgal_excl_test8.bed
+
+
+
+
+## When i ran the Rscript from orthus it gave these values for mean and median_
+"512575.983001738 208967"
+While my first run gave me this:
+557574.361934679	248870  

@@ -77,9 +77,9 @@ grangesFromDataframe <- function(data, colName, keep_metadata=TRUE){
   
   data_r <-
     data %>%
-    mutate(start=as.character(str_split(!!rlang::enquo(colName), pattern = ":|-", simplify = TRUE)[,2]),
-           end=as.character(str_split(!!rlang::enquo(colName), pattern = ":|-", simplify = TRUE)[,3]),
-           CHR= as.character(str_split(!!rlang::enquo(colName), pattern = ":|-", simplify = TRUE)[,1]))
+    mutate(start=as.character(str_split(!!rlang::enquo(colName), pattern = ":|-|_", simplify = TRUE)[,2]),
+           end=as.character(str_split(!!rlang::enquo(colName), pattern = ":|-|_", simplify = TRUE)[,3]),
+           CHR= as.character(str_split(!!rlang::enquo(colName), pattern = ":|-|_", simplify = TRUE)[,1]))
   
   
   # Granges object is needed to detect SNP loci that overlap 2 GRBs

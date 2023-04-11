@@ -1,0 +1,114 @@
+---
+title: "Testing enrichment of LRR with genome shuffling"
+output: html_notebook
+---
+
+# Description
+Using genome shuffling to test for enrichment of LRR in GRBs
+
+# Libraries
+```{r Libraries, message=FALSE}
+library(GenomicRanges)
+library(tidyverse)
+
+
+project_dir <- "/home/katarina/MyProjects/targPred"
+inputs_dir <- "data/inputs"
+processed_dir <- "data/processed"
+outputs_dir <- "/data/outputs"
+
+source(file.path(project_dir, "src/scripts/utils.R"))
+```
+
+Load data
+```{r}
+ep_permutated <- read.table(file.path(project_dir, "data", "random", "shuffled_beds", "out_7357.txt"))
+```
+
+
+## Shuffled grbs
+```{r}
+x <- ep_permutated$V1
+
+ggplot(data = data.frame(x), aes(x = x)) +
+  geom_histogram(aes(y=..density..), bins = 100,  fill="gray", color="black") +
+  geom_density(alpha = 0.2, fill="red", color="black") +
+  labs(title="Histogram with Density Overlay", x="x", y="Density") +
+  geom_vline(xintercept = 241863, linetype="dotted", color = "blue", size=1.5) +
+  theme_bw()
+```
+
+```{r}
+x <- ep_permutated$V2
+
+options(scipen = 999)
+ggplot(data = data.frame(x), aes(x = x)) +
+  geom_histogram(aes(y=..density..), bins = 100,  fill="gray", color="black") +
+  geom_density(alpha = 0.2, fill="yellow", color="black") +
+  labs(title="Histogram with Density Overlay", x="x", y="Density") +
+  geom_vline(xintercept = 108324, linetype="dotted", color = "blue", size=1.5) +
+  theme_bw()
+```
+
+
+
+
+# Ignore this
+```{r}
+enhancer_transcript_df <- readRDS(file.path(project_dir, processed_dir, "by_GRB_list_enh_trans_df.rds"))
+```
+
+Distribution of EP lenghts 
+```{r}
+data_ <- enhancer_transcript_df %>%
+  filter(emp < 0.001 & !is.na(enh_trans_range)) %>% 
+  select(enh, transcript, enh_trans_range) %>%
+  unique()
+
+x <- data_$enh_trans_range
+
+ggplot(data = data.frame(x), aes(x = log10(x))) +
+  geom_histogram(aes(y=..density..),  fill="gray", color="black") +
+  geom_density(alpha = 0.2, fill="orange", color="black") +
+  labs(title="Histogram EP lenghts in GRBs", x="x", y="Density") +
+  theme_bw()
+```
+
+
+```{r}
+data_ <- enhancer_transcript_df %>%
+  select(grb) %>%
+  unique()
+
+grbs <- grangesFromDataframe(data = data_, colName = grb)
+makeBed(grbs, modify_start = -1, filename = file.path(project_dir, processed_dir, "genome_browser", "modified_grbs_overlaping_enh_and_loci2021.bed"))
+
+summary(width(grbs))
+
+x <- width(grbs)
+
+ggplot(data = data.frame(x), aes(x = log10(x))) +
+  geom_histogram(aes(y=..density..),  fill="gray", color="black") +
+  geom_density(alpha = 0.2, fill="violet", color="black") +
+  labs(title="Histogram GRB width", x="x", y="Density") +
+  theme_bw()
+```
+
+
+Mean and median EP legnth grb
+```{r}
+data_ <- enhancer_transcript_df %>%
+  filter(emp < 0.001 & !is.na(enh_trans_range)) %>% 
+  select(enh, transcript, enh_trans_range) %>%
+  unique()
+
+
+grb_mean <- mean(data_$enh_trans_range)
+grb_median <- median(data_$enh_trans_range)
+```
+
+
+# Session Info
+```{r Session info}
+sessionInfo()
+```
