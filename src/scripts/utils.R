@@ -232,6 +232,27 @@ load_per_chr_empP_file <- function(current_chr, emp_dir = "") {
                      empP=empP_values$empP)
 }
 
+writeGrangesToText <- function(gr, dir = "", is_empP_file = FALSE){
+  
+  if(class(gr) != "GRanges"){
+    errorCondition("The object is not of class GRanges")
+  }
+  
+  if(is_empP_file){
+    coor <- "enh"
+  }
+  else{coor <- "coordinates"}
+  mcol_names <- colnames(mcols(gr))
+  
+  gr.df <- as.data.frame(gr) 
+  gr.df[coor] <- paste0(gr.df$seqnames, ":", gr.df$start, "-", gr.df$end)
+  gr.df$chr <- gr.df$seqnames
+  # Reordering columns 
+  gr.df <- gr.df[, c("chr", coor, mcol_names)]
+  write.table(gr.df, file = dir, quote = FALSE, sep = "\t", row.names = FALSE)
+  
+}
+
 
 per_GRB_empP_matrix <- function(empP_gr, current_GRB, genes_to_include) {
   

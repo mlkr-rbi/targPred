@@ -22,7 +22,7 @@ source(file.path(project_dir, "src/scripts/utils.R"))
 
 Load data
 ```{r}
-ep_permutated <- read.table(file.path(project_dir, "data", "random", "shuffled_beds", "out_7357.txt"))
+ep_permutated <- read.table(file.path(project_dir, "data", "random", "shuffled_beds", "out_7359.txt"))
 ```
 
 
