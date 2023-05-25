@@ -10,24 +10,28 @@
 	# this selects the correct population (EUR) and generates subpopulations
 	# it also transforms the output to Plink1 format
 
-4)	python make_bed.py
+3)	qsub plink1_job.sge
+	# this calculates linkage disequillibrium blocks
+	# it also transforms the output to Granges
+
+5)	python make_bed.py
 	# create bed files from plink
 
-5)	# concatenate all .bed files using `cat` command to out/EUR_phase3_chrALL.bed
+6)	# concatenate all .bed files using `cat` command to out/EUR_phase3_chrALL.bed
 
-6)	python gwas_associations.py
+7)	python gwas_associations.py
 	# this generates gwas_associations_LDblock.csv
 
-7)	qsub make_gwas_snp_in_grb.sge
+8)	qsub make_gwas_snp_in_grb.sge
 	# this runs gwas_snps_in_grb.R or gwas_snps_in_grb_no_kurtosis.R
 	# you need to select kurtosis or no_kurtosis by changing the script name in .sge script
 
-8)	# create directories for plots
+9)	# create directories for plots
 	mkdir plots
 	mkdir plots/expression_pairs
 	mkdir plots/gviz_plots
 
-9)	qsub make_gviz.sge
+10)	qsub make_gviz.sge
 
-10)	qsub make plots.sge
+11)	qsub make plots.sge
 
