@@ -158,8 +158,6 @@ per_GRB_genes_classification <- function(current_GRB, loci.gr) {
                          stringsAsFactors=F)
   rownames(genes.df) <- as.character(g)
   
-  print("current_loci")
-  print(current_loci)
   # add GWAS genes
   if(any(str_length(current_loci$GWAS_GENES)>0)) {
     #symb <- unique(unlist(str_split(current_loci$gwas_genes, ",")))
@@ -189,8 +187,6 @@ per_GRB_genes_classification <- function(current_GRB, loci.gr) {
     gwas$start <- sapply(gwas$symbol, function(h) {
       start(genes.hg19.ensembl[genes.hg19.ensembl$hgnc_symbol==h])
     })
-   print("gwas")
-   print(gwas)
     
     genes.df <- merge(genes.df, gwas, by.x=c(1,3,2), by.y=c(2,1,4), all=T)
     colnames(genes.df)[4] <- "category"
@@ -208,8 +204,6 @@ per_GRB_genes_classification <- function(current_GRB, loci.gr) {
   target$category <- sapply(target$symbol, function(x) {
     cat <- ifelse(genes.df$category[genes.df$symbol==x]=="GWAS-in", "GWAS-trgt", "GRB-trgt")[1]
   })
-  print("target")
-  print(target)
   target <- unique(target)
   for (i in 1:nrow(target)) {
     genes.df$category[genes.df$symbol==target$symbol[i]] <- target$category[i]
