@@ -37,7 +37,7 @@ gwas_associations <- readRDS(file.path(aux_dir,"gwas_associations.rds"))
 ep_pair_dir <- file.path("plots/expression_pairs")
 
 # for testing one change value in bracket
-for (trait in unique(loci_in_GRBs.df$MAPPED_TRAIT)[1]) {
+for (trait in unique(loci_in_GRBs.df$MAPPED_TRAIT)) {
   
   # Generating folder in ep_pair_dir for trait
   trait_dir <- str_replace_all(trait, " ", "_")
@@ -102,96 +102,15 @@ for (trait in unique(loci_in_GRBs.df$MAPPED_TRAIT)) {
   
   for(i in 1:length(trait_grbs)){
   # For continuing grbs
-  #for(i_grb in trait_grbs[match(i_grb, trait_grbs):length(trait_grbs)]){
-      
     # loci_in_GRB for working trait
     i_loci.gr <- loci_in_GRBs.gr[(mcols(loci_in_GRBs.gr)$MAPPED_TRAIT == trait)]
     plots_prom_expression_beanplot_per_locus(byGRB_list, i=i,
                             neuronal=F, sign="permutation", 
                             dir=file.path(ep_pair_dir,trait_dir),
-                            file_suffix= paste0(trait_dir,"_", "_gene_expression_beanplot2.png"))
-#    break
+                            file_suffix= paste0(trait_dir, "_gene_expression_beanplot2.png"))
     
   }
   end_time <- Sys.time()
   print(start_time-end_time)
-#  break
 }
 
-#comment out gviz as it is done in another script
-if (FALSE){
-gviz_dir <- file.path( "plots/gviz_plots")
-
-
-# Adding a column to grbs that correspond to targets
-grbs$targets <- grbs$geneName
-# actual plotting, saved in gviz_dir
-loci_in_GRBs.gr$name <- loci_in_GRBs.gr$SNPS # need to have a $name column for gviz plotting
-# pretty sure this is not important. transfered this into GWAS_SNPs_inGRB
-# genome(loci_in_GRBs.gr) <- genome(BSgenome.Hsapiens.UCSC.hg19)
-# seqlevels(loci_in_GRBs.gr) <- seqlevels(BSgenome.Hsapiens.UCSC.hg19)
-# seqlengths(loci_in_GRBs.gr) <- seqlengths(BSgenome.Hsapiens.UCSC.hg19)
-# gen <- genome(loci_in_GRBs.gr)
-# preparing mart to extract gene objects from
-mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL", host="https://feb2014.archive.ensembl.org")
-
-
-#gging loci to be treated separately as these contain some exceptions:
-# TBR1 locus [10] -> merge 2 GRBs...
-#sink("Gviz_Rconsoleoutput.txt")
-for(trait in unique(loci_in_GRBs.df$MAPPED_TRAIT)){
-  trait_dir <- file.path(gviz_dir,str_replace_all(trait," |/","_"))
-  # Creates a dir if it does not exist
-  if(!file.exists(trait_dir)){dir.create(trait_dir)}
-  #sink(paste(gviz_dir,"/",str_replace_all(trait," |/","_"),"/","Gviz_Rconsoleoutput.txt", sep = ""))
-  # to be done on each locus
-  message(trait)
-  # Including only loci in trait
-  loci_in_GRB_trait <- loci_in_GRBs.gr[loci_in_GRBs.gr$MAPPED_TRAIT == trait,]
-  # Remoivng duplicated SNPS per trait/locus
-  loci_in_GRB_trait <- loci_in_GRB_trait[!duplicated(loci_in_GRB_trait$SNPS),]
-  
-  grbs_to_loop <-
-    which( names(byGRB_list) %in% str_replace_all(loci_in_GRB_trait$grb.coords, pattern = ":|-", replacement = "_"))
-  
-  #for (i in (1:length(byGRB_list))) {
-  for (i in grbs_to_loop) {
-    print(paste("Plotting Gviz for", names(byGRB_list)[i], sep=" "))
-    tryCatch(locusGviz(i, 
-                dir=paste0(trait_dir,"/",str_replace_all(trait," |/","_"),"_"),
-                labels=T, 
-                byGRB_list=byGRB_list, 
-                # Selecting only loci with the trait
-                loci.gr= loci_in_GRB_trait, 
-                # Selecting only SNPs with the trait
-                snps.gr=snps_in_GRBs.gr[snps_in_GRBs.gr$SNPS %in%
-                                          loci_in_GRB_trait$SNPS,],
-                grbs=grbs, 
-                mart=mart,
-                trait = trait),
-              error=function(e){cat("ERROR :",conditionMessage(e), "\n",
-                                    trait, i)})
-  }
-  #sink()
-}
-
-
-Purple <- "#A74F7C" 
-Grey   <- "#7D949B"
-print(snps_in_GRBs.gr[snps_in_GRBs.gr$SNPS %in% c("rs1891058", "rs147340715")])
-current_SNPs <- 
-#  filter(snps_in_GRBs.gr, is.element(SNPS, c("rs1891058", "rs147340715")))
-  snps_in_GRBs.gr[snps_in_GRBs.gr$SNPS %in% c("rs1891058", "rs147340715")]
-current_GRB <- subsetByOverlaps(grbs, current_SNPs)
-strack <- AnnotationTrack(current_SNPs, name="GWAS SNPs", 
-                          stacking="full",
-                          group=current_SNPs$SNPS, groupAnnotation="group",
-                          fill=Purple, col=Purple)
-grbtrack <- AnnotationTrack(current_GRB, name="GRB human:dog", 
-                            id=current_GRB$targets, fontcolor.feature="black", 
-                            fill=Grey, col=Grey)
-displayPars(grbtrack) <- list(featureAnnotation="id")
-plotTracks(list(grbtrack, strack),
-           sizes = c(1,1),
-           background.title="azure3", fontcolor.title="black")
-}

@@ -197,8 +197,6 @@ per_GRB_genes_classification <- function(current_GRB, loci.gr) {
   }
   
   # add target genes
-  #target <- data.frame(ensembl=unlist(str_split(current_loci$targets_ge_ens_mm10, ",")), stringsAsFactors=F)
-  #target <- data.frame(symbol=unlist(str_split(current_loci$GRB_GENES, ",")), 
   target <- data.frame(symbol=unlist(str_split(current_loci$GWAS_GENES, ",")), 
                        stringsAsFactors=F)
   target$category <- sapply(target$symbol, function(x) {
@@ -357,13 +355,9 @@ plots_prom_expression_beanplot_per_locus <-
     # there are actually some filenames longer than 255 chars
     # f <- substr(names(byGRBlist)[i], 1, (255-str_length(file_suffix)))
     # f <- paste0(dir, f, file_suffix)
-    png(filename=paste0(dir, names(byGRBlist)[i], file_suffix), 
-        width=200*length(genes_ens)+140, 
+    png(filename=paste0(dir, "/", names(byGRBlist)[i], file_suffix), 
+        width=300*length(genes_ens)+180, 
         height=200*length(enh_vec)+100)
-    # consider
-    #    png(filename=paste0(dir, names(byGRBlist)[i], file_suffix), 
-    # width=300*length(genes_ens)+180, 
-    #  height=200*length(enh_vec)+100)
     
     print(paste0("Plotting beanplot for ", names(byGRBlist)[i]))
     
