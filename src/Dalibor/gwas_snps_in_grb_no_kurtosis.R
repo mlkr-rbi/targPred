@@ -307,8 +307,6 @@ grb_subset.df <-
   mutate(grb.coords = str_c(chr,":",start,"-",end)) %>%
   dplyr::select(targets, grb.coords) %>%
   dplyr::rename(GRB_GENES=targets)
-loci_in_GRBs.df <-
-  left_join(loci_in_GRBs.df, grb_subset.df, by="grb.coords")
 
 saveRDS(loci_in_GRBs.df, file = file.path("loci_in_GRBs.df.rds"))
 saveRDS(grb_subset, "pop_EUR_2022_grb_subset_GeThesisTargets.rds")
