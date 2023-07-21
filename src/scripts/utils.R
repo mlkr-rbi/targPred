@@ -217,9 +217,9 @@ per_GRB_genes_classification <- function(current_GRB, loci.gr) {
 }
 
 
-load_per_chr_empP_file <- function(current_chr, emp_dir = "") {
+load_per_chr_empP_file <- function(current_chr, emp_dir = "", fn="empP_CAGEenhPermissive_hg19Ens_6.4Mb_" ) {
   
-  f <- file.path(emp_dir, paste0("empP_CAGEenhPermissive_hg19Ens_6.4Mb_", as.character(current_chr), ".txt"))
+  f <- file.path(emp_dir, paste0(as.character(current_chr), fn,  ".txt"))
   print(paste("[load_per_chr_empP_file] Loading", f, sep=" "))
   empP_values <- read.table(f, sep="\t", stringsAsFactors=F, skip=1)
   #empP_values <- na.omit(empP_values)

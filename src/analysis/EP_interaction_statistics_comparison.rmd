@@ -1,0 +1,254 @@
+---
+title: "EP interaction statistics comparison"
+output: html_notebook
+---
+
+# Description
+Using genome shuffling to test for enrichment of LRR in GRBs
+
+# Libraries
+```{r Libraries, message=FALSE}
+library(GenomicRanges)
+library(tidyverse)
+library("vsn")
+library(kohonen)
+
+
+project_dir <- "/home/katarina/MyProjects/targPred"
+inputs_dir <- "data/inputs"
+processed_dir <- "data/processed"
+outputs_dir <- "/data/outputs"
+
+source(file.path(project_dir, "src/scripts/utils.R"))
+```
+
+Loading data
+Loading only chromosome 18 data since it has the least interactions
+```{r}
+chr <- "chr18"
+empP_gr_18 <- read.table(file = file.path(project_dir, processed_dir, "empP_et_all_files_denovo", paste0("empP_CAGEen_denovo_hg19Ens_6.4Mb_", chr, ".txt")),
+    header = TRUE)
+
+fantom5.enhancers.tpm.gr <- readRDS(file.path(project_dir, processed_dir,"fantom5.enhancers.tpm.pooled.gr.rds"))
+
+promoter_cage_tpm_df <- readRDS(file.path(project_dir, processed_dir,"promoter_cage_tpm_df_fixed_pooled.rds"))
+
+temp <- read.table(file = file.path(project_dir, processed_dir, "empP_et_all_files_denovo", paste0("pearson_CAGEen_denovo_hg19Ens_6.4Mb_", chr, ".txt")),
+    header = TRUE)
+
+empP_gr_18$pearson_r <- temp$pearson_r
+empP_gr_18$pearson_p <- temp$pearson_p
+
+p_thresh <- 0.001
+```
+
+Number of significant pairs
+```{r}
+table(empP_gr_18$empP < 0.001)
+table(empP_gr_18$spearman_p < 0.001)
+table(empP_gr_18$pearson_p < 0.001)
+
+prop.table(table(empP_gr_18$empP < 0.001, empP_gr_18$spearman_p < 0.001))
+prop.table(table(empP_gr_18$empP < 0.001, empP_gr_18$pearson_p < 0.001))
+prop.table(table(empP_gr_18$spearman_p < 0.001, empP_gr_18$pearson_p < 0.001))
+
+table(empP_gr_18$empP < 0.001, empP_gr_18$spearman_p < 0.001)
+table(empP_gr_18$empP < 0.001, empP_gr_18$pearson_p < 0.001)
+table(empP_gr_18$spearman_p < 0.001, empP_gr_18$pearson_p < 0.001)
+
+```
+
+```{r}
+data_ <- empP_gr_18 %>%
+    filter(spearman_p < p_thresh & pearson_p < p_thresh) %>%
+    mutate(empP_signf = ifelse(empP < p_thresh, TRUE, FALSE))
+
+ggplot(data_, aes(x = pearson_r, y = spearman_r, color = empP_signf)) +
+    geom_point(alpha = 0.6) +
+    scale_color_manual(values = brewer.pal(n = 8, name = "RdBu")[c(2,7)], name ="empP significance") + 
+    ylim(0.2, 0.75) + 
+    xlim (0.2, 0.9) +
+    geom_density_2d(alpha = 1) +
+    theme_bw()+
+    geom_abline(intercept = 0, slope = 1, color = "black") +
+    theme(text = element_text(size = 20)) +
+    labs(x = "Pearson's r", y = "Spearman's rho")
+ggsave(height = 10, width = 10, file.path(project_dir, outputs_dir, "statistics_seminar/spearman_pearson_scatterplot.png"))
+
+
+```
+Reviewing p value distributions
+```{r}
+hist(empP_gr_18$empP)
+hist(empP_gr_18$spearman_p)
+
+```
+
+```{r}
+meanSdPlot(promoter_cage_tpm_df, ranks = FALSE) +
+    ylim(0,40000)
+
+promoter_cage_mean_sd <- as.data.frame(promoter_cage_tpm_df) %>%
+    mutate(mean_value = rowMeans(.),   # Calculate mean for each row
+    sd_value = apply(., 1, sd)) %>%
+    select(mean_value, sd_value)
+
+# filtering some outliers
+data_ <- promoter_cage_mean_sd %>%
+    filter(sd_value < 1000)
+
+ggplot(data_, aes(x = mean_value, y = sd_value)) +
+    geom_hex(bins = 50) +
+    theme_bw() +
+    theme(text = element_text(size = 20))+
+    labs(x = "Mean value", y = "Standard deviation")
+ggsave(height = 10, width = 10, file.path(project_dir, outputs_dir, "statistics_seminar/meanSdPlot.png"))
+```
+
+
+```{r}
+# Largest combined score
+enh_1 <- c("chr18:76831132-76831674", "ENSG00000166377:ENST00000307671")
+# target gene and low spearman big eff size
+enh_2 <- c("chr18:19759263-19759580", "ENSG00000141448:ENST00000269216")
+# High spearman
+enh_3 <- c("chr18:13382338-13382799", "ENSG00000168675:ENST00000586222")
+# Second highest
+enh_4 <- c("chr18:73628376-73628483", "ENSG00000150656:ENST00000358821")
+# Outliers in ro r plot and one star(*) empP
+enh_5 <- c("chr18:46467138-46467469", "ENSG00000101665:ENST00000262158")
+# Also outlier empp =1
+enh_6 <- c("chr18:47834061-47834491", "ENSG00000134042:ENST00000256425")
+# High pearson and spearman
+enh_7 <- c("chr18:13382338-13382799", "ENSG00000168675:ENST00000586222")
+# High Spearman low Pearson
+enh_8 <- c("chr18:13217020-13217525","ENSG00000168675:ENST00000399848")
+# not empP significant and 
+enh_9 <- c("chr18:21417655-21417852","ENSG00000053747:ENST00000269217")
+# empP significant, no pearson and spearman
+enh_10 <- c("chr18:45581027-45581432", "ENSG00000154832:ENST00000285106")
+enh_11 <- c("chr18:6416928-6417109","ENSG00000101608:ENST00000217652")
+
+
+my_enh <- enh_11
+
+s <- subsetByOverlaps(fantom5.enhancers.tpm.gr, GRanges(my_enh[1]))
+enh_expression <- apply(as.data.frame(mcols(s)), 2, sum)
+p <- promoter_cage_tpm_df[rownames(promoter_cage_tpm_df) == my_enh[2]]
+expression_for_pair <- data.frame(enh_expression=enh_expression, prom=p)
+
+col2plot <- brewer.pal(8, "PiYG")[8]
+
+plot_beanplot_individual_modified(expression_for_pair, neuronal = FALSE, 
+                                  col2plot = col2plot, sign="permutation", n = 1,
+                                  fn = file.path(project_dir, outputs_dir, "statistics_seminar", paste0("beanplots", my_enh[2],"-", start(my_enh[1]), ".png")))
+
+pearson_cor <- cor.test(x =expression_for_pair$enh_expression,
+    y = expression_for_pair$prom,
+    method = "pearson")
+
+spearman_cor <- cor.test(x =expression_for_pair$enh_expression,
+    y = expression_for_pair$prom,
+    method = "spearman")
+
+ggplot(expression_for_pair, aes(x = enh_expression, y = prom)) +
+    geom_point()+
+    geom_smooth(method = "lm") +
+    geom_text(x = min(expression_for_pair$enh_expression)+ 0.4, y = max(expression_for_pair$prom)-4, label = paste0("Pearson corelation: ", round(pearson_cor$estimate, 3)), size = 10) +
+    geom_text(x = min(expression_for_pair$enh_expression)+ 0.4, y = max(expression_for_pair$prom)-2, label = paste0("Spearman corelation: ", round(spearman_cor$estimate, 2)), size = 10)+
+    theme(text = element_text(size = 20)) +
+    labs(x = "Enhancer expression", y = "Promoter expression")
+
+ggsave(file =  file.path(project_dir, outputs_dir, "statistics_seminar", paste0("correlation:", my_enh[2],"-", my_enh[1], ".png")))
+
+
+```
+
+
+Relation of number of pairs and distance tested
+```{r}
+ggplot(empP_gr_18, aes(x = log10(EP_dist), fill = "ALL")) +
+    geom_histogram(bins=150, alpha = 0.5) +
+    geom_histogram(data = filter(empP_gr_18, empP < p_thresh), aes(x =log10(EP_dist), fill ="Signif"), bins = 150, alpha = 0.5) +
+    geom_histogram(data = filter(empP_gr_18, empP > p_thresh), aes(x =log10(EP_dist), fill ="Not-Signif"), bins = 150, alpha = 0.5) +
+    scale_fill_manual(values = c("darkblue", "black", "darkred")) +
+    theme_bw() +
+    theme(text = element_text(size = 20))
+
+ggsave(height = 10, width = 20, file =  file.path(project_dir, outputs_dir, "statistics_seminar", paste0("distribution_of_EP_dist.png"))) 
+```
+
+# WIlcox on enhancer pairs
+```{r}
+E_active <- expression_for_pair$enh_expression > 0
+
+
+wilcox.test(x = expression_for_pair$prom[E_active], y = expression_for_pair$prom[!E_active])
+
+```
+
+# SOMs
+```{r}
+data_ <- matrix(c(expression_for_pair$enh_expression, expression_for_pair$prom), ncol = 2)
+
+# Create a SOM grid
+som_grid <- somgrid(xdim = 5, ydim = 5, topo = "hexagonal")
+
+# Train the SOM
+som_model <- som(data_, grid = som_grid)
+
+plot(som_model)
+plot(som_model, type="counts")
+plot(som_model, type="mapping")
+```
+
+
+```{r}
+
+# Set the parameters for the density distribution
+mean_value <- 70 
+sd_value <- 15
+
+# Generate random data
+set.seed(123)
+data <- data.frame(
+  Value = rnorm(1000, mean = mean_value, sd = sd_value)
+)
+
+# Create plot using ggplot
+ggplot(data, aes(x = Value)) +
+  geom_density(fill = "darkgreen", alpha = 0.5) +
+#   stat_function(fun = dnorm, args = list(mean = mean_value, sd = sd_value),
+#                 aes(color = "True"), linetype = "dashed") +
+  scale_color_manual(values = "black", labels = "True") +
+  labs(title = "Density Distribution",
+       x = "Promoter TMPs", y = "Density") +
+  theme_bw() +
+  xlim(0, 100)
+
+ggsave(height = 10, width = 20, file =  file.path(project_dir, outputs_dir, "statistics_seminar", paste0("distribution_active.png"))) 
+
+
+```
+
+
+# Distribution of p-values
+```{r}
+ggplot(empP_gr_18, aes(x = spearman_p))+
+    geom_histogram() +
+    theme(text = element_text(size = 20))
+
+ggsave(height = 10, width = 10, file =  file.path(project_dir, outputs_dir, "statistics_seminar", paste0("histogram_spearman_p.png"))) 
+
+ggplot(empP_gr_18, aes(x = empP))+
+    geom_histogram() +
+    theme(text = element_text(size = 20))
+
+ggsave(height = 10, width = 10, file =  file.path(project_dir, outputs_dir, "statistics_seminar", paste0("histogram_emopp.png"))) 
+
+```
+
+# Session Info
+```{r Session info}
+sessionInfo()
+```

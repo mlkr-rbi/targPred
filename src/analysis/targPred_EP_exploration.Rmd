@@ -52,6 +52,8 @@ elements:
 # I am commenting this 22.03. and switching to Dalibors plink version of gwas 2021
 by_GRB_list <- readRDS(file.path(project_dir, inputs_dir, "targPred_byGRB_list_wEnhancers_GeThesisTargets_FANTOM5.rds"))
 by_GRB_list <- readRDS(file.path(project_dir, processed_dir, "byGRB_list.rds"))
+# Third version of the byGRB_list with CNE density GRBs and plink loci
+by_GRB_list <- readRDS( file = file.path(project_dir, processed_dir, "byGRB_list_cneDensityGRB_plinkLoci.rds"))
 
 # enhancer_transcript_df with ranges, Provided by Filip - mail
 enh_trans_ranges <- readRDS(file = file.path(project_dir, inputs_dir, "enh_trans_ranges.rds"))
@@ -75,7 +77,7 @@ GRB_CAT_COLORS <- c("GRB-byst" ="#143159",
 This chunk checks if the enhancer_transcript_df table is already calculated. If it is not true, run CREATE enhancer_transcript_df chunk
 ```{r}
 # enhancer_transcript_df table adress
-filename <- file.path(project_dir, processed_dir, "by_GRB_list_enh_trans_df.rds")
+filename <- file.path(project_dir, processed_dir, "by_GRB_list_enh_trans_cneDensityGRB_plinkLoci_df.rds")
 file.exists(filename)
 ```
 
@@ -218,14 +220,14 @@ for(i in 1:length(by_GRB_list)){
   
     
   # Apending rows to enhancer_transcript_df
-  enhancer_transcript_df <- rbind(enhancer_transcript_df, working_df)
+  enhancer_transcript_df <- dplyr::rbind(enhancer_transcript_df, working_df)
   
 }
 
 # Adding ranges from R object - provided by Filip
 enhancer_transcript_df <-
   enhancer_transcript_df %>%
-  left_join(enh_trans_ranges, by = c("enh","transcript"))
+  dplyr::left_join(enh_trans_ranges, by = c("enh","transcript"))
 
 rm(enh_trans_ranges)
 
@@ -234,7 +236,8 @@ enhancer_transcript_df <- enhancer_transcript_df %>%
   mutate(gene_num_4enh = ifelse(is.na(gene_num_4enh), 0, gene_num_4enh),
          enh_num_4gene = ifelse(is.na(enh_num_4gene), 0, enh_num_4gene))
 
-saveRDS(enhancer_transcript_df, file.path(project_dir, processed_dir, "by_GRB_list_enh_trans_df.rds"))
+# saveRDS(enhancer_transcript_df, file.path(project_dir, processed_dir, "by_GRB_list_enh_trans_df.rds"))
+saveRDS(enhancer_transcript_df, filename)
 ```
 
 

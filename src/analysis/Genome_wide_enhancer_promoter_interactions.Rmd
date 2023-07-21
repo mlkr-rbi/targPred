@@ -804,6 +804,91 @@ for(chr in chr_vec){
   }
 ```
 
+
+
+# New metrics
+```{r}
+empP_gr <- read.table("data/random/empP_CAGEen_denovo_hg19Ens_6.4Mb_chr6.txt", header = TRUE)
+
+
+data_ <- filter(empP_gr, spearman_p < 0.00001, E_active > 70)
+
+ggplot(data = data_, aes(x = log10(EP_dist), y = eff_size, fill=spearman_r)) +
+  geom_point(aes(color = spearman_r)) +
+  theme_bw() +
+  ggtitle("exploration")
+
+```
+
+```{r}
+# hist(empP_gr$EP_dist)
+
+p <- ggplot(data = empP_gr, aes(x = EP_dist)) + 
+  geom_density( fill = "blue", alpha = 0.5) 
+
+data_ <- filter(empP_gr, empP < 0.001)
+
+p <- p +
+  geom_density(data = data_, aes(x = EP_dist), fill = "orange", alpha = 0.5)
+
+print(p)
+
+```
+
+
+```{r}
+# hist(empP_gr$EP_dist)
+
+p <- ggplot(data = empP_gr, aes(x = EP_dist)) + 
+  geom_histogram( fill = "blue", alpha = 0.5) 
+
+data_ <- filter(empP_gr, empP < 0.001)
+
+p <- p +
+  geom_histogram(data = data_, aes(x = EP_dist), fill = "orange", alpha = 0.5)
+
+print(p)
+```
+
+
+Min max plot
+```{r}
+data_ <- filter(empP_gr, empP < 0.001) %>%
+  group_by(enh_pos) %>%
+  summarise(min_EP_dist = min(EP_dist),
+    max_EP_dist = max(EP_dist),
+    enh_count = n(),
+    median_EP_dist = median(EP_dist))
+
+
+ggplot(data = data_, aes(x = log10(max_EP_dist), y = log10(min_EP_dist), color = enh_count)) +
+  geom_point()
+
+hist(data_$min_EP_dist, xlim(c(0,100000)))
+```
+
+
+
+# Loading GeneHancer data
+```{r }
+geneHancer <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_AnnotSV_gene_association_scores_v5.16.txt"),
+  header = TRUE)
+
+hg19genes <- readRDS(file.path(project_dir, processed_dir, "genes.hg19.ensembl.rds"))
+
+gh_tissues <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_AnnotSV_tissues_v5.16.txt"),
+  header = TRUE, sep = "\t") %>%
+  filter(source == "FANTOM5")
+
+geneHancer <- geneHancer %>%
+  filter( is.element(GHid, gh_tissues$GHid)) %>%
+  filter(is.element(symbol, hg19genes$hgnc_symbol))
+
+
+
+
+```
+
 # Session Info
 ```{r Session info}
 sessionInfo()
