@@ -4,14 +4,17 @@ Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka.
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
 ## sastanak 02.08.2023.
-_Katarina_
-Raspravljali smo o Nininom zadatku. Nina je pogledala na primjeru jednog VCF-a i pronašla neke overlappove s GWAS datasetovima (oko 90). Isfiltirala je jedan trait, ali na žalost nije bilo overlapping enhancera.
-Svi vcf file-ovi nalaze se na orthusu i riješen je access. Prije nego što skida fileove kod sebe lokalno će procesirati podatke i sve pacijente staviti u jedan file te će tako izgubiti informacija o pacijentima. Naknadno, kada dobije fenotipkse informacije lako će se ponovno to povezati s pacijentima.
+_Katarina_  
+@Nina - Raspravljali smo o Nininom zadatku. Nina je pogledala na primjeru jednog VCF-a i pronašla neke overlappove s GWAS datasetovima (oko 90). Isfiltirala je jedan trait, ali na žalost nije bilo overlapping enhancera. Svi vcf file-ovi nalaze se na orthusu i riješen je access. Prije nego što skida fileove kod sebe lokalno će procesirati podatke i sve pacijente staviti u jedan file te će tako izgubiti informacija o pacijentima. Naknadno, kada dobije fenotipkse informacije lako će se ponovno to povezati s pacijentima.
 Nakon što pripremi SNP-ove će te varijante provući kroz čitav targPred što uključuje računje LD blokova. To će zahtijevati prilagodbu nekih dijelova koda… 
-@Katarina pokazala neke talk-ove koji su potencijalno zanimljivi, poput modela koji predviđa CAGE signal. Jedan poster je pokazao da enformer ne gleda enhancer regije za predviđanje gene expression. Spominjao se [Gasperini et al (2019) CRISPRi dataset]([url](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6690346/)) koji je kandidat za JC. Slajdove i bilješke će biti prebačene u shared drive. 
+@Katarina pokazala neke talk-ove koji su potencijalno zanimljivi, poput modela koji predviđa CAGE signal. Jedan poster je pokazao da enformer ne gleda enhancer regije za predviđanje gene expression. Spominjao se [Gasperini et al (2019) CRISPRi dataset]([url](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6690346/)) koji je kandidat za JC. Slajdove i bilješke će biti prebačene u shared drive.   
 - [ ] Napraviti folder u shareanom drive-u sa slajdovima i bilješkama relevantnih prezentacija s ISCB/ECCB
+
 @svi Početi popunjavati dijelove paper-a. Dodali smo neke stvari, malo izmjenili raspored i izdelegirali paragrafe. Odredili smo 16. Ili 17.08. Za sljedeći sastanak na kojem ćemo raspraviti o update-u. 
+- [ ]  Do 16. ili 17.08. Napraviti neki entry za paper. [Link na overleaf]([url](https://www.overleaf.com/project/6409fa3589bb0064d5cdfea0))
+
 @Miha Ideja korištenje LLM-a i prompt engineering za izvlačenje dijagnoza i drugih informacija iz free format teksta u neki standardizirani oblik. Isprobati to u kontekstu uzoraka pacijenata i exomskih sekvenci sa MEF-a. Generalizirati za sve nalaze iz BIS-ova. 
+
 
 
 ## sastanak 10.07.2023.
