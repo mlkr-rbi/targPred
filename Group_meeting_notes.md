@@ -3,10 +3,36 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 11.09.2023.
+_Katarina_
+
+Nastavno na Daliborov JC s paperom:
+“Integrative analysis of metabolite GWAS illuminates the molecular basis of pleiotropy and genetic correlation” https://elifesciences.org/articles/79348#content 
+Svaki član grupe dobio je dio metoda za obraditi i prezentirati pred ostatkom grupe. Poanta je da bolje razumijemo aktualne metode koje se koriste u za analizu pleiotropije i da razmislimo možemo li nešto iskoristiti za naš projekt. 
+
+@Anja - BOLT-LMM -metoda za GWAS calling,  a mixed-model association method. Inače modeli pretpostavljaju infinitesimal genetic architecture gdje su effect size-ovi normalno distribuirani. BOLT-LMM korsiti Bayesian mixture prior na marker effect size-ove (non-infinitesimal). 
+Each locus makes an infinitesimal contribution to the variance
+Polygenic = "the random sampling of alleles at each gene produces a continuous, normally distributed phenotype in the population„
+Trait isn’t normally distributed, but it’s genetic component is (around parents’ mean)
+
+=> not true for loci under the influence of few genes
+
+loci of large effect conditioned out as fixed effects
+Mixed model applied to a selection of markers
+Apply Bayesian perspective to mixed model: modelling SNP effects with non-Gaussian prior distributions that better accommodate loci of both small and large effect. -> BOLT-LMM
+
+@Filip Coloc-based colocalization, LDSC genetic correlation i stratified LD score regression
+
+@Dalibor primjena paketa Hess na procjenu nasljednosti svojstava unutar određenih puteva. Lokalna varijanta (ro-Hess) za procjenu lokalne kovarijance LD blokova koje se preklapaju s regijama puteva. Program HESS služi za računanje korelacije između svojstava za određivanje genomskih regija koje pridonose više svojstava (traits).
+
+@Katarina  Mendelian Randomization (MR) za causal inference. MR koristi nasumičnu raspodijelu gena u populaciji kako bi odredila kauzalnost između exposure i outcome. Za MR određuje se set SNP-ova koji su asocirani s exposure varijablom i zadovoljavaju neke uvjete (instrumental variables). Zatim se računa Beta vrijednost (causal effect) kao omjer asocijacije exposure-a i asocijacije s outcome-om. Zaključili smo da trenutno nemamo primjenu ovoga za naš projekt, ali svakako je koristan alat za neka buduća istraživanja.
+
+
 ## sastanak 02.08.2023.
 _Katarina_  
 @Nina - Raspravljali smo o Nininom zadatku. Nina je pogledala na primjeru jednog VCF-a i pronašla neke overlappove s GWAS datasetovima (oko 90). Isfiltirala je jedan trait, ali na žalost nije bilo overlapping enhancera. Svi vcf file-ovi nalaze se na orthusu i riješen je access. Prije nego što skida fileove kod sebe lokalno će procesirati podatke i sve pacijente staviti u jedan file te će tako izgubiti informacija o pacijentima. Naknadno, kada dobije fenotipkse informacije lako će se ponovno to povezati s pacijentima.
 Nakon što pripremi SNP-ove će te varijante provući kroz čitav targPred što uključuje računje LD blokova. To će zahtijevati prilagodbu nekih dijelova koda… 
+
 @Katarina pokazala neke talk-ove koji su potencijalno zanimljivi, poput modela koji predviđa CAGE signal. Jedan poster je pokazao da enformer ne gleda enhancer regije za predviđanje gene expression. Spominjao se [Gasperini et al (2019) CRISPRi dataset]([url](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6690346/)) koji je kandidat za JC. Slajdove i bilješke će biti prebačene u shared drive.   
 - [ ] Napraviti folder u shareanom drive-u sa slajdovima i bilješkama relevantnih prezentacija s ISCB/ECCB
 
