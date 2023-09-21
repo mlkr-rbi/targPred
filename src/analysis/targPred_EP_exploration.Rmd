@@ -51,9 +51,9 @@ elements:
 # by_GRB_list provided by Anja - mail
 # I am commenting this 22.03. and switching to Dalibors plink version of gwas 2021
 by_GRB_list <- readRDS(file.path(project_dir, inputs_dir, "targPred_byGRB_list_wEnhancers_GeThesisTargets_FANTOM5.rds"))
-by_GRB_list <- readRDS(file.path(project_dir, processed_dir, "byGRB_list.rds"))
+# by_GRB_list <- readRDS(file.path(project_dir, processed_dir, "byGRB_list.rds"))
 # Third version of the byGRB_list with CNE density GRBs and plink loci
-by_GRB_list <- readRDS( file = file.path(project_dir, processed_dir, "byGRB_list_cneDensityGRB_plinkLoci.rds"))
+# by_GRB_list <- readRDS( file = file.path(project_dir, processed_dir, "byGRB_list_cneDensityGRB_plinkLoci.rds"))
 
 # enhancer_transcript_df with ranges, Provided by Filip - mail
 enh_trans_ranges <- readRDS(file = file.path(project_dir, inputs_dir, "enh_trans_ranges.rds"))
@@ -220,7 +220,7 @@ for(i in 1:length(by_GRB_list)){
   
     
   # Apending rows to enhancer_transcript_df
-  enhancer_transcript_df <- dplyr::rbind(enhancer_transcript_df, working_df)
+  enhancer_transcript_df <- rbind(enhancer_transcript_df, working_df)
   
 }
 
@@ -384,7 +384,7 @@ ggplot(per_gene, aes(x=category, y=enh_num_4gene, fill=category)) +
 ggplot(per_gene, aes(x=category, y=enh_num_4gene, fill=category)) +
   geom_violin()+
   coord_cartesian(ylim = c(0,20)) +
-  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun.data = give.n, geom = "text") +
   stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
   stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)+
   scale_fill_manual(values = GRB_CAT_COLORS)+

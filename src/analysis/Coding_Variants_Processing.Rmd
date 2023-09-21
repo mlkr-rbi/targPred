@@ -409,6 +409,22 @@ Here i save the non EFO ids into an table locally and through https://www.ebi.ac
 write.table(clnv_terms_nonEFO, sep = "|", quote = FALSE, file = "output/03-nonEFO_terms.csv")
 ```
 
+
+# Using DODO for cross mapping
+Using DODO to cross reference gwas traits.
+If this rds file is missing run efo_to_mondor.R script
+```{r}
+# Loading the whole 
+efo_ids_dodo <- readRDS(file = file.path(project_dir, processed_dir, "efo_to_mondo_mappigns_with_DODO.rds"))
+```
+
+
+```{r}
+efo_ids_dodo[(sapply(efo_ids_dodo, function(tb) dim(tb)[1]) == 1)]
+
+```
+
+
 # Session Info
 ```{r Session info}
 sessionInfo()

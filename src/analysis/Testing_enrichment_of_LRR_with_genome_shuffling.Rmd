@@ -108,6 +108,119 @@ grb_median <- median(data_$enh_trans_range)
 ```
 
 
+# GH scores for testing LRR
+
+gh_empP_ov is generated in Genome_wide_enhancer_promoter_interactions
+```{r}
+grbs <- readRDS(file.path(project_dir, processed_dir, "GRBs_with_targets.gr.rds" ))
+
+gh_empP_ov$inGRB <- FALSE
+gh_empP_ov$target_gene <- FALSE
+
+# Enhancer in GRB
+temp <- queryHits(findOverlaps(gh_empP_ov, grbs))
+gh_empP_ov$inGRB[temp] <- TRUE
+
+# Transcript is target gene
+temp <- is.element(gh_empP_ov$symbol, grbs$targets)
+gh_empP_ov$target_gene[temp] <- TRUE
+
+
+# EP distance for enhancers in GRBs
+ggplot(as.data.frame(gh_empP_ov), aes(x=inGRB, y=EP_dist, fill=inGRB))+
+  geom_boxplot() +
+  theme_minimal()+
+  coord_cartesian(ylim = c(-0.5,10**6))+
+  scale_fill_manual(values = c("black", "darkred"))+
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)+
+  stat_compare_means(method = "wilcox.test", label.y.npc = 0.1, label.x.npc = "left", method.args =list(alternative = "greater"))
+
+
+ggplot(as.data.frame(gh_empP_ov), aes(x=combined_score, fill = inGRB)) +
+  geom_density(alpha = 0.5)
+
+# this gives 4 plots- not very informative but it is interesting to see that
+ggplot(as.data.frame(gh_empP_ov), aes(x=inGRB, y=EP_dist, fill=target_gene))+
+  geom_boxplot() +
+  theme_minimal()+
+  coord_cartesian(ylim = c(-0.5,10**6))+
+  scale_fill_manual(values = c("black", "darkred"))+
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)+
+  stat_compare_means(method = "wilcox.test", label.y.npc = 0.1, label.x.npc = "left", method.args =list(alternative = "greater")) +
+  theme(text = element_text(size = 20))
+
+
+ggplot(filter(as.data.frame(gh_empP_ov), EP_dist >= cutoff_long), aes(x=inGRB, y=spearman_r, fill=target_gene))+
+  geom_boxplot() +
+  theme_minimal()+
+  # coord_cartesian(ylim = c(-0.5,10**6))+
+  scale_fill_manual(values = c("black", "darkred"))+
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", size = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "gray", size = 0.4, show.legend = FALSE)+
+  stat_compare_means(method = "wilcox.test", label.y.npc = 0.1, label.x.npc = "left", method.args =list(alternative = "greater")) +
+  theme(text = element_text(size = 20))
+
+```
+
+
+
+This part is based on genome_shuffling_EP_length_processing
+```{r}
+
+
+# file_ <- "/home/katarina/MyProjects/targPred/data/random/shuffled_beds/shuffle_491.bed"
+file_ <- "/home/katarina/MyProjects/targPred/data/inputs/shuffle_parallel7357/"
+# file_ <- "/home/katarina/MyProjects/GRB/GRB_thresholds_beds/hg19.canFam3.98.50.processed.threshold.grbs.bed"
+
+ep_dist_vec <- c()
+
+ep_ranges_all <- GRanges()
+
+# for(chr in "chr1"){
+for(i in c(1:100)){
+  
+  shuffled_grb <- read.table(file = file.path(file_, paste0("shuffle_",i,".bed")))
+  shuffled_grb <- shuffled_grb[-1,]
+
+  shuffled_grb.gr <- GRanges(seqnames = shuffled_grb$V1,
+                            ranges = IRanges(start = as.numeric(shuffled_grb$V2) +1 ,
+                                              end = as.numeric(shuffled_grb$V3)))
+    
+  # Filtering enhancers that overlap shuffled grbs
+  empP_gr <- subsetByOverlaps(gh_empP_ov, shuffled_grb.gr, type = "within")
+  
+    
+  # Splitting granges by the position of enhancers and transcripts
+  empP_gr_E_start <- empP_gr[start(empP_gr) < empP_gr$transcript_position]
+  ep_ranges_1 <- GRanges(seqnames = rep(chr, length(empP_gr_E_start)),
+                       IRanges(start = start(empP_gr_E_start),
+                              end = empP_gr_E_start$transcript_position))
+  
+  empP_gr_T_start <- empP_gr[start(empP_gr) > empP_gr$transcript_position]
+  ep_ranges_2 <- GRanges(seqnames = rep(chr, length(empP_gr_T_start)),
+                         IRanges(end = start(empP_gr_T_start),
+                                 start = empP_gr_T_start$transcript_position))
+  
+  ep_ranges <- c(ep_ranges_1, ep_ranges_2)
+  # Overlapping with shuffled grb ranges, the whole range is WITHIN
+  ep_ranges <- subsetByOverlaps(ep_ranges, shuffled_grb.gr, type = "within")
+  
+
+  # ep_dist_vec <- c(ep_dist_vec, width(ep_ranges))
+  ep_dist_vec <- width(ep_ranges)
+  
+  
+line = paste0(mean(ep_dist_vec), "\t", median(ep_dist_vec))
+write(line, file=file.path(project_dir, outputs_dir, "shuffling_with_gh.txt"), append=TRUE)
+}
+
+
+```
 # Session Info
 ```{r Session info}
 sessionInfo()

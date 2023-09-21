@@ -1,5 +1,6 @@
 # Description: Using empirical approach and geneHancer data to select
 # enhancers that are long or short range and extracting sequences
+# Tried out gmm and kmeans, and kmeans gave better results
 
 library(GenomicRanges)
 library(plyranges)
@@ -7,6 +8,8 @@ library(ggpubr)
 library(tidyverse)
 library(ggplot2)
 library(rtracklayer)
+library(GGally, help, pos = 2, lib.loc = NULL)
+library(mclust, help, pos = 2, lib.loc = NULL)
 
 # sequences for hg19
 library(BSgenome.Hsapiens.UCSC.hg19)
@@ -20,74 +23,9 @@ outputs_dir <- "/data/outputs"
 
 source(file.path(project_dir, "src/scripts/utils.R"))
 
-# Loading all geneHancer scores data
-geneHancer <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_AnnotSV_gene_association_scores_v5.16.txt"),
-  header = TRUE)
+gh_empP_ov <- readRDS(file.path(project_dir, processed_dir, "geneHancer_fantom5_overlap.gr.rds"))
 
-# Anjas granges object that contains ensembl and hgnc ids
-hg19genes <- readRDS(file.path(project_dir, processed_dir, "genes.hg19.ensembl.rds"))
-
-# gh that are from FANTOM5 to reduce number of enh
-gh_tissues <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_AnnotSV_tissues_v5.16.txt"),
-  header = TRUE, sep = "\t") %>%
-  filter(source == "FANTOM5")
-
-# Reducing number of gh
-geneHancer <- geneHancer %>%
-  filter( is.element(GHid, gh_tissues$GHid)) %>%
-  filter(is.element(symbol, hg19genes$hgnc_symbol))
-
-# Adding ensembl ids
-temp <- data.frame(hgnc_symbol = hg19genes$hgnc_symbol, ensembl = names(hg19genes))
-
-geneHancer <-
-  dplyr::left_join(geneHancer,temp, by = c("symbol" = "hgnc_symbol"))
-
-# Loading genomic location of enhancers
-gh_bed <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_hg19_v5.16.bed"))
-
-gh_bed <- filter(gh_bed, is.element(V4, geneHancer$GHid))
-
-gh_bed <- left_join(gh_bed, geneHancer, by = c("V4" = "GHid"))
-
-gh_gr <- GRanges(seqnames = gh_bed$V1,
-  ranges = IRanges(start = gh_bed$V2,
-  end = gh_bed$V3))
-
-gh_gr$gh_names <- gh_bed$V4
-values(gh_gr) <- select(gh_bed, symbol,ensembl, combined_score, is_elite)
-
-# Genome wide empP data with added metrics
-chr_vec <- paste0("chr", c(1:22)) %>%
-  append("chrX")
-
-genome_EP_distance <- data.frame()
-
-print("Checkpoint 1")
-for(chr in chr_vec){
-  
-      empP_gr <- read.table(file = file.path(project_dir, processed_dir, "empP_et_all_files_denovo", paste0("empP_CAGEen_denovo_hg19Ens_6.4Mb_", chr, ".txt")),
-      header = TRUE)
-  
-  
-  data_ <- as.data.frame(empP_gr) %>%
-  as.data.frame() %>%
-  dplyr::filter(empP < 0.001)
-
-  genome_EP_distance <- rbind(genome_EP_distance, data_)
-}
-
-
-# dropping chromosome column since it causes errors
-genome_EP_distance <- genome_EP_distance %>%
-  select (-chr)
-genome_EP_distance_gr <- grangesFromDataframe(genome_EP_distance, colName = enh_pos)
-
-gh_empP_ov <- join_overlap_intersect(gh_gr, genome_EP_distance_gr)
-gene_ids <- gh_empP_ov$gene
-gene_ids <- str_extract(gene_ids, "^[^:]+")
-gh_empP_ov <- plyranges::filter(gh_empP_ov, ensembl == gene_ids)
-
+# Summarising by enhancer
 data_ <- as.data.frame(gh_empP_ov) %>%
   mutate(gh_pos = paste0(seqnames,":", start,"-", end)) %>%
   select(-seqnames, -start, - end, -strand) %>%
@@ -100,7 +38,9 @@ data_ <- as.data.frame(gh_empP_ov) %>%
     is_elite = median(is_elite),
     eff_size_mean = mean(eff_size),
     r_mean = mean(spearman_r),
-    E_active = median(E_active))
+    E_active = mean(E_active),
+    empP_median = median(empP),
+    width = unique(width))
 
 
 data_ <- data_ %>%
@@ -119,30 +59,65 @@ x <- data_ %>%
     min_EP_dist = scale(min_EP_dist),
     max_EP_dist = scale(max_EP_dist),
     enh_count = scale(enh_count),
+    width = scale(width),
     median_EP_dist = scale(median_EP_dist),
     gh_score_mean = scale(gh_score_mean),
     E_active = scale( E_active)) %>% 
   # select(-min_EP_dist) %>%
-  # select(-max_EP_dist) %>%
-  select(-median_EP_dist) %>%
+  select(-max_EP_dist) %>%
+  # select(-median_EP_dist) %>%
+  # select(-cluster) %>%
   select(everything())
 
 
-# x <- scale(as.numeric(x$min_EP_dist))
+timestamp <- Sys.time()
+timestamp <- format(timestamp, "%Y%m%d_%H%M_")
 
-cl_num <- 2
 
+
+BIC <- mclustBIC(x)
+plot(BIC)
+summary(BIC)
+
+cl_num <- 3
+
+# gmm <- Mclust(x, G = cl_num, modelName = "VEV")
 k <- kmeans(x=x, centers=cl_num, iter.max = 100, nstart = 100, algorithm = c("Hartigan-Wong"), trace = FALSE)
 
 data_$cluster <- as.factor(k$cluster)
+# data_$cluster <- as.factor(gmm$classification)
+# data_$is_elite <- as.factor(data_$is_elite)
+
+write.table(data_, file.path(project_dir, outputs_dir, "nucleotide_transformer/clustering",
+  # paste0(timestamp, "summarised_by_enhancer_clusteredGMM_modelVEV_3cl_InclMedian.txt")),
+  paste0(timestamp, "summarised_by_enhancer_clusteredkmeans_3cl_InclMedianMaxDist.txt")),
+   quote= FALSE, sep = "\t")
+
+# Saving models
+saveRDS(k, file.path(project_dir, outputs_dir, "nucleotide_transformer/clustering",
+  # paste0(timestamp, "GMM_modelVEV_3cl_InclMedian.rds")))
+  paste0(timestamp, "model_kmeans_3cl_InclMedianMaxDist.rds")))
 
 ggplot(data_, aes(x=median_EP_dist, y = enh_count, color = cluster)) +
   geom_point() +
-  scale_color_manual(values = brewer.pal(cl_num, "Set1"))
+  scale_color_manual(values = brewer.pal(4, "Set1"))
 
-
+# DENSITY
 ggplot(data_, aes(x = median_EP_dist, fill = cluster)) +
   geom_density(alpha = 0.5) 
+
+ggsave(file.path(project_dir, outputs_dir, "nucleotide_transformer/clustering",
+  paste0(timestamp, "density_kmeans_3cl_InclMedianMaxDist.png") ))
+
+# PAIRS
+ggpairs(select(data_, -gh_pos), aes(color=cluster, alpha = 0.3)) +
+  theme_bw() +
+  scale_color_manual(values = brewer.pal(8,"Set1"))
+
+ggsave(file.path(project_dir, outputs_dir, "nucleotide_transformer/clustering",
+  paste0(timestamp, "pairs_plots_kmeans_3cl_InclMedianMaxDist.png")),
+  width = 15, height= 15)
+
 
 lr_cluster <- ifelse(median(filter(data_, cluster ==1)$median_EP_dist) > median(filter(data_, cluster ==2)$median_EP_dist), 1,2 )
 sr_cluster <- ifelse(lr_cluster == 2, 1, 2)
@@ -155,14 +130,21 @@ cutoff_short <- filter(data_, cluster == sr_cluster) %>% pull(median_EP_dist) %>
 
 ggplot(data_, aes(x = median_EP_dist, fill = cluster)) +
   geom_density(alpha = 0.5) +
-  geom_vline(xintercept = cutoff_long, linetype="dashed", color = "purple", size=0.9) +
-  geom_vline(xintercept = cutoff_short, linetype="dashed", color = "purple", size=0.9) +
+  # geom_vline(xintercept = cutoff_long, linetype="dashed", color = "purple", size=0.9) +
+  # geom_vline(xintercept = cutoff_short, linetype="dashed", color = "purple", size=0.9) +
   xlim(0,10**6) +
-  scale_color_manual(values = brewer.pal(cl_num, "Set1"))
+  ylim(0, 0.00005) +
+  scale_color_manual(values = brewer.pal(2, "Set1"))
+
+# Defining long and short ranges
+# nucleotide_transformer_gr <- data_ %>%
+#     mutate(class = case_when(median_EP_dist > cutoff_long & cluster == lr_cluster ~ "long-range",
+#         median_EP_dist < cutoff_short & cluster == sr_cluster ~ "short-range",
+#         TRUE ~ "not-defined"))
 
 nucleotide_transformer_gr <- data_ %>%
-    mutate(class = case_when(median_EP_dist > cutoff_long & cluster == lr_cluster ~ "long-range",
-        median_EP_dist < cutoff_short & cluster == sr_cluster ~ "short-range",
+    mutate(class = case_when( cluster == 3 ~ "long-range",
+         cluster == 1 ~ "short-range",
         TRUE ~ "not-defined"))
 
 # write.table(nucleotide_transformer_gr, file.path(project_dir, outputs_dir, "nucleotide_transformer/enhancers_annotation_all_gr.txt"), quote=FALSE,row.names=FALSE, sep = "\t")
@@ -172,6 +154,14 @@ nucleotide_transformer_gr <- grangesFromDataframe(nucleotide_transformer_gr, col
 
 # Filtering out intermediates 
 nucleotide_transformer_gr <- nucleotide_transformer_gr[nucleotide_transformer_gr$class != "not-defined"]
+
+# Filtering out width less than 300
+min_enh_width <- 300
+table(width(nucleotide_transformer_gr) > min_enh_width)
+table(width(filter(nucleotide_transformer_gr, class != "not-defined")) > min_enh_width)
+table(width(filter(nucleotide_transformer_gr, class == "long-range")) > min_enh_width)
+table(width(filter(nucleotide_transformer_gr, class == "short-range")) > min_enh_width)
+
 # write.table(as.data.frame(mcols(nucleotide_transformer_gr)), file.path(project_dir, outputs_dir, "nucleotide_transformer/enhancers_annotation_short_long_gr.txt"), quote=FALSE,row.names=FALSE, sep = "\t")
 
 # gathering sequences
@@ -194,3 +184,14 @@ nucleotide_transformer_gr <- nucleotide_transformer_gr[nucleotide_transformer_gr
 # mcols(nucleotide_transformer_hg38_gr) <- mcols(nucleotide_transformer_gr)[,-1] # removing hg19 gh_positions
 # write.table(as.data.frame(mcols(nucleotide_transformer_hg38_gr)), file.path(project_dir, outputs_dir, "nucleotide_transformer/enhancers_annotation_short_long_gr.hg38.txt"), quote=FALSE,row.names=FALSE, sep = "\t")
 # write.table(as.data.frame(getSeq(BSgenome.Hsapiens.UCSC.hg38, nucleotide_transformer_hg38_gr)), file.path(project_dir, outputs_dir, "nucleotide_transformer/enh_sequences_short_long.hg38.txt"))
+
+# Filtering width for nucleotide transformer
+short_long_gr <- nucleotide_transformer_gr[width(nucleotide_transformer_gr)>=300]
+
+short_long_seq <- as.data.frame(getSeq(BSgenome.Hsapiens.UCSC.hg19, short_long_gr[short_long_gr$class != "not-defined"]))
+short_long_seq$label <- ifelse(short_long_gr[short_long_gr$class != "not-defined"]$class == "long-range", "long", "short")
+write.table(short_long_seq %>%  select(label, sequence = "x"),
+  file.path(project_dir, outputs_dir, "nucleotide_transformer/enh_sequences_short_long_labeled_width300.hg19.csv"),
+  quote=FALSE, row.names = FALSE, sep = ",")
+
+

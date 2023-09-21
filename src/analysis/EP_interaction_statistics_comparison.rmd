@@ -130,7 +130,7 @@ enh_10 <- c("chr18:45581027-45581432", "ENSG00000154832:ENST00000285106")
 enh_11 <- c("chr18:6416928-6417109","ENSG00000101608:ENST00000217652")
 
 
-my_enh <- enh_11
+my_enh <- enh_10
 
 s <- subsetByOverlaps(fantom5.enhancers.tpm.gr, GRanges(my_enh[1]))
 enh_expression <- apply(as.data.frame(mcols(s)), 2, sum)

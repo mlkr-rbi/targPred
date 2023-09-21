@@ -12,6 +12,9 @@ library(gprofiler2)
 library(tidyverse)
 library(pheatmap)
 library(RColorBrewer)
+library(ontologyIndex)
+library(ontologySimilarity)
+library(ggpubr)
 
 project_dir <- "/home/katarina/MyProjects/targPred"
 inputs_dir <- "data/inputs"
@@ -96,7 +99,26 @@ is.element(unique(clnv$MONDO_ID), unique(gwas_grb_clnv$MONDO_ID)) %>% table()
 message("How many clinvar MONDO IDs overlap GWAS MONDO IDs")
 is.element(unique(gwas_grb_clnv$MONDO_ID), unique(clnv$MONDO_ID)) %>% table()
 message("How many GWAS MONDO IDs overlap clinvar MONDO IDs")
+(gwas_grb_clnv$MONDO_ID) %>% is.na() %>% table()
+message("GWAS variants that are NOT mapped to MONDO")
+x = length(unique(gwas_grb_clnv$MONDO_ID))
+y = length(unique(gwas_grb_clnv$MAPPED_TRAIT))
+message("\n")
+message(paste0("Number of unique terms in targpred from GWAS:", y,
+               ". \nNumber of terms that are cross referenced to MONDO:", x,
+               ". \nRatio: ", x/y))
+
+
+clnv$MONDO_ID %>% is.na() %>% table()
+message("ClinVar variants that are NOT mapped to MONDO")
+x = length(unique(clnv$MONDO_ID))
+y = length(unique(clnv$CLNDN))
+message(paste0("Number of unique terms from ClinVar:", y,
+               ". \nNumber of terms that are cross referenced to MONDO:", x,
+               ". \nRatio: ", x/y))
 ```
+
+
 
 # Genes associatied with phenotype
 Preparing gene sets per phenotype for clinvar and gwas target genes. Subseting for phenotypes that appear in clinvar AND gwas. Matching was done by MONDO ID. This way around 100 phenotypes are included which is not perfect. There are some phenotype (eg. schizophrenia) that semantically would be matched but are not matched with EFO-MONDO or whatever.
@@ -263,6 +285,187 @@ pheatmap(clnv_gwas_matx,
          filename = file.path(project_dir, outputs_dir, paste0("phenotype_plots/heatmap_clnv_gwas_gene_set_proportions.png")))
 ```
 
+
+# Disease similarity
+Setting up mondo ontology
+I have no Idea where I downloaded this file but it is:
+format-version: 1.2
+data-version: releases/2022-08-01
+ontology: mondo
+```{r}
+mondo <- get_OBO(file = file.path(project_dir, inputs_dir, "coding_variant_data/mondo.obo"))
+```
+
+
+There are around 5000 genes from clinvar, comparing phenotype similarities for each and storing in a data frame
+```{r}
+clnv_genes <- filter(clnv, !is.na(MONDO_ID)) %>%
+  filter(!is.na(gene)) %>%
+  pull(gene) %>%
+  unique() 
+
+# Create an empty data frame with column names
+similarity_data_frame <- data.frame(gene = character(0), gwas_sim = numeric(0), grb_sim = numeric(0))
+
+i <- 0
+for(i_gene in clnv_genes){
+
+  i <- i +1
+  if(i%%500==0){
+    print(paste("[Calculating ",i, "out of", length(clnv_genes), "]"))
+  }
+
+terms_gwas <- gwas_grb_clnv %>%
+  filter(str_detect(GWAS_GENES, i_gene)) %>%
+  pull(MONDO_ID) %>%
+  unique() %>%
+  na.omit()
+
+terms_grbs <- gwas_grb_clnv %>%
+  filter(str_detect(GRB_GENES, i_gene)) %>%
+  pull(MONDO_ID) %>%
+  unique() %>%
+  na.omit()
+
+terms_clnv <- clnv %>% 
+  filter(gene == i_gene) %>%
+  pull(MONDO_ID) %>%
+  na.omit()
+
+# any(terms_clnv, terms_grbs, terms_gwas)
+
+sim_grid <- get_sim_grid(ontology = mondo, 
+                         term_sets2 = list(terms_gwas, terms_grbs), 
+                         term_sets = list(terms_clnv),
+                         term_sim_method = "lin")
+
+# similarity_data_frame <- rbind(similarity_data_frame, c(i_gene, sim_grid[1,]))
+
+new_row <- data.frame(gene= i_gene, gwas_sim= sim_grid[1,1], grb_sim = sim_grid[1,2])
+similarity_data_frame <- base::rbind(similarity_data_frame, new_row)
+}
+```
+```{r}
+# write.csv(similarity_data_frame, file = file.path(project_dir, outputs_dir, "coding_variants/disease_similarity_with_coding_variants_per_gene.csv"))
+```
+
+```{r}
+data_ <- similarity_data_frame %>%
+  filter(is.element(gene, unique(gwas_grb_clnv$GRB_GENES)))
+
+print(
+wilcox.test(x = data_$gwas_sim, y = data_$grb_sim, paired = TRUE, alternative = "less"))
+data_ <- pivot_longer(data_, cols =c("gwas_sim", "grb_sim"),  names_to = "sim")
+
+ggplot(data_, aes(x = sim, y = value))+
+  geom_boxplot()+
+  stat_compare_means(method = "wilcox.test", label.y.npc = 0.9, label.x.npc = "center", method.args = list(alternative = "greater"))
+```
+
+
+# Cross-referencing with DODO
+Doing this here, but put it somewhere else
+```{r}
+library(DODO)
+connect_to_dodo("https://genodesy.org/DODO/", remember=TRUE)
+list_database()
+```
+Ok. change orphanet to ORPHA
+Moving this into a script since it takes too long to run
+```{r}
+efo_ids_to_map <- gwas_grb_clnv %>%
+  filter(is.na(MONDO_ID)) %>%
+  pull(MAPPED_TRAIT_ID) %>%
+  unique()
+
+tb <- convert_concept(from = "EFO:0004337", 
+                      to = "MONDO",
+                      # from.concept = "Phenotype",
+                      # to.concept = "Disease",
+                  step = NULL,
+                  intransitive_ambiguity = NULL
+                  )
+
+tb <- get_related(from = "EFO:0004584",
+                  to = "MONDO",
+                  from.concept = "Phenotype",
+                  # to.concept = "Phenotype",
+                  step = NULL,
+                  intransitive_ambiguity = NULL)
+
+dodo_efo_mondo <- list()
+ids_err <- c()
+
+for(i in 1:length(efo_ids_to_map)){
+
+# This looks for direct references
+dodo_efo_mondo[[efo_ids_to_map[i]]] <- convert_concept(from = efo_ids_to_map[i],
+                      to = "MONDO")
+
+# 
+if(dim(dodo_efo_mondo[[efo_ids_to_map[i]]])[1] == 0){
+   dodo_efo_mondo[[efo_ids_to_map[i]]] <- convert_concept(from = efo_ids_to_map[i], 
+                      to = "MONDO",
+                      step = NULL,
+                      intransitive_ambiguity = NULL)
+  
+}
+if(dim(dodo_efo_mondo[[efo_ids_to_map[i]]])[1] == 0){
+  tryCatch({
+    dodo_efo_mondo[[efo_ids_to_map[i]]] <- get_related(from = efo_ids_to_map[i], 
+                                                       to = "MONDO",
+                                                       from.concept = "Phenotype",
+                                                       to.concept = "Phenotype",
+                                                       step = NULL,
+                                                       intransitive_ambiguity = NULL)
+  }, error = function(e) {
+    # Handle the error here (you can print a message, skip, or take other action)
+    message(paste("Error for", efo_ids_to_map[i], ":", conditionMessage(e)))
+    ids_err <- c(ids_err, efo_ids_to_map[i])
+  })
+  
+  }
+
+}
+
+
+```
+
+```{r}
+dodo_efo_mondo <- readRDS(file.path(project_dir, processed_dir, "efo_to_mondo_mappigns_with_DODO.rds"))
+```
+
+
+```{r}
+gwas_grb_clnv %>%
+  select(MAPPED_TRAIT_ID, MAPPED_TRAIT) %>%
+  unique() %>%
+  filter(is.element(MAPPED_TRAIT_ID, names(which(sapply(dodo_efo_mondo, function(tb) dim(tb)[1]) ==0)))) %>%
+  pull(MAPPED_TRAIT) %>% str_detect("measure|volume") %>% table()
+
+sapply(dodo_efo_mondo, function(tb) dim(tb)[1])
+
+```
+
+random
+```{r}
+ggplot(temp, aes(x = rownames(temp))) +
+  geom_point(aes(y = temp$ENSG00000145349.ENST00000342666), color = "red") +
+  geom_point(aes(y = temp$ENSG00000145362.ENST00000264366), color = "blue") +
+  geom_point(aes(y = temp$ENSG00000145362.ENST00000502701), color = "green") +
+  geom_point(aes(y = temp$ENSG00000145362.ENST00000503271), color = "purple") +
+  geom_point(aes(y = temp$ENSG00000145362.ENST00000508613), color = "orange") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+temp_long <- gather(temp, key = "genes", value = "value")#, -rownames)
+rownames(temp_long) <- rownames(te)
+
+# Create a line plot with connected points for each column
+ggplot(temp_long, aes(x = genes,  y = value, color = genes)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
 
 # Session Info
 ```{r Session info}

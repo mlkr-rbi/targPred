@@ -811,12 +811,19 @@ for(chr in chr_vec){
 empP_gr <- read.table("data/random/empP_CAGEen_denovo_hg19Ens_6.4Mb_chr6.txt", header = TRUE)
 
 
-data_ <- filter(empP_gr, spearman_p < 0.00001, E_active > 70)
+#data_ <- filter(empP_gr, spearman_p < 0.00001, E_active > 70)
+data_ <- filter(empP_gr, spearman_p < 0.001)
 
 ggplot(data = data_, aes(x = log10(EP_dist), y = eff_size, fill=spearman_r)) +
   geom_point(aes(color = spearman_r)) +
   theme_bw() +
   ggtitle("exploration")
+
+ggplot(data = data_, aes(x=EP_dist/1000))+
+  #geom_histogram(binwidth = 2)+
+  geom_density(alpha = 0.5) +
+  theme(text = element_text(size = 20)) +
+  xlim(0,500) 
 
 ```
 
@@ -871,21 +878,267 @@ hist(data_$min_EP_dist, xlim(c(0,100000)))
 
 # Loading GeneHancer data
 ```{r }
+# Loading all geneHancer scores data
 geneHancer <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_AnnotSV_gene_association_scores_v5.16.txt"),
   header = TRUE)
 
+# Anjas granges object that contains ensembl and hgnc ids
 hg19genes <- readRDS(file.path(project_dir, processed_dir, "genes.hg19.ensembl.rds"))
 
+# gh that are from FANTOM5 to reduce number of enh
 gh_tissues <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_AnnotSV_tissues_v5.16.txt"),
   header = TRUE, sep = "\t") %>%
   filter(source == "FANTOM5")
 
+# Reducing number of gh
 geneHancer <- geneHancer %>%
   filter( is.element(GHid, gh_tissues$GHid)) %>%
   filter(is.element(symbol, hg19genes$hgnc_symbol))
 
+# Adding ensembl ids
+temp <- data.frame(hgnc_symbol = hg19genes$hgnc_symbol, ensembl = names(hg19genes))
+
+geneHancer <-
+  dplyr::left_join(geneHancer,temp, by = c("symbol" = "hgnc_symbol"))
+
+# Loading genomic location of enhancers
+gh_bed <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_hg19_v5.16.bed"))
+
+gh_bed <- filter(gh_bed, is.element(V4, geneHancer$GHid))
+
+gh_bed <- left_join(gh_bed, geneHancer, by = c("V4" = "GHid"))
+
+gh_gr <- GRanges(seqnames = gh_bed$V1,
+  ranges = IRanges(start = gh_bed$V2,
+  end = gh_bed$V3))
+
+gh_gr$gh_names <- gh_bed$V4
+values(gh_gr) <- select(gh_bed, symbol,ensembl, combined_score, is_elite)
+```
 
 
+Combining signif. empP EP pairs
+```{r}
+
+
+# makeBed(unique(empP_gr), filename = file.path(project_dir, "data/random/chr6_enhancers.bed"),
+#   includetrackname = TRUE, track_name = "fantom5_enh" )
+```
+
+
+## Genome-wide EP dist but with other metrics
+```{r}
+
+chr_vec <- paste0("chr", c(1:22)) %>%
+  append("chrX")
+
+genome_EP_distance <- data.frame()
+
+
+for(chr in chr_vec){
+  
+  # empP_gr <- readRDS(file = file.path(project_dir, outputs_dir, "empP_EP_distance", paste0(chr, "empP_CAGEenhPermissive_hg19Ens_6.4Mb_with_distances")))
+    empP_gr <- read.table(file = file.path(project_dir, processed_dir, "empP_et_all_files_denovo", paste0("empP_CAGEen_denovo_hg19Ens_6.4Mb_", chr, ".txt")),
+      header = TRUE)
+  
+  
+  data_ <- as.data.frame(empP_gr) %>%
+  as.data.frame() %>%
+  dplyr::filter(empP < 0.001)
+
+  genome_EP_distance <- rbind(genome_EP_distance, data_)
+}
+```
+
+
+Combining gh and empP data
+Since GH processed enhancers in a way that they combined mulitple sources tehre are not many f5 enahncers that have their ranges saved since they overlap wider ENCODE or Ensembl enhancers.
+```{r}
+# dropping chromosome column since it causes errors
+genome_EP_distance <- genome_EP_distance %>%
+  select (-chr)
+genome_EP_distance_gr <- grangesFromDataframe(genome_EP_distance, colName = enh_pos)
+
+gh_empP_ov <- join_overlap_intersect(gh_gr, genome_EP_distance_gr)
+gene_ids <- gh_empP_ov$gene
+gene_ids <- str_extract(gene_ids, "^[^:]+")
+gh_empP_ov <- plyranges::filter(gh_empP_ov, ensembl == gene_ids)
+```
+
+
+exlporing gh i f5 
+```{r}
+data_ <- as.data.frame(mcols(gh_empP_ov))
+
+data_$chr <- as.numeric(str_split(data_$enh_pos, "chr|:", simplify = TRUE)[,2])
+
+data_ <- data_ %>%
+ arrange(chr)
+
+ggplot(data_, aes(x = transcript_position, y = combined_score)) + 
+  geom_point() + 
+  facet_wrap(~ chr, scales = "free_x") +
+  xlab("Location") +
+  ylab("Value") 
+
+ggplot(data_, aes(x = EP_dist, y = combined_score, color = eff_size)) +
+  geom_point() +
+  xlim(0, 10**6)
+
+ggplot(data_, aes(x = eff_size, y = combined_score)) +
+  geom_point() 
+
+x <- data_$EP_dist
+probs <- 0.90
+cutoff <- quantile(x, probs = probs)
+
+
+ggplot(data_, aes(x = EP_dist)) +
+  geom_density() +
+  xlim(0, 1000000)+
+  geom_vline(xintercept = cutoff, linetype="dashed", color = "purple", size=0.9)
+
+```
+
+
+# gene focused view of EP distances
+```{r}
+grbs <- read.table(file.path(project_dir, inputs_dir, "hg19.canFam3.98.50.processed.threshold.grbs.bed"))
+
+grbs <- grbs[-1,]
+
+grbs.gr <- GRanges(seqnames = grbs$V1,
+    ranges = IRanges(start = as.numeric(grbs$V2) +1 ,
+      end = as.numeric(grbs$V3)))
+
+# Excluding overlapping grbs (smaller ones) Hardcoded. 
+# To check, grbs overlap should be equal to length
+grbs.gr <- grbs.gr[-c(1237, 1193, 1094, 289, 139, 17)]
+
+
+
+gh_transcripts.gr <- GRanges(seqnames = seqnames(gh_empP_ov),
+  ranges = IRanges(gh_empP_ov$transcript_position))
+gh_transcripts.gr$gene_category <- "GRB-out"
+ov <- findOverlaps(gh_transcripts.gr, grbs.gr)
+gh_transcripts.gr[queryHits(ov)]$gene_category <- "bystander"
+
+gh_transcripts.gr$ensembl <- gh_empP_ov$ensembl
+target_genes <- read.table(file.path(project_dir, inputs_dir, "hg19.canFam3.tsv"),
+  header=TRUE)
+
+gh_transcripts.gr[is.element(gh_transcripts.gr$ensembl, target_genes$ENSEMBLGeneID )]$gene_category <- "target"
+
+gh_empP_ov$gene_category <- gh_transcripts.gr$gene_category
+```
+
+
+Doing plots
+```{r}
+data_ <- as.data.frame(mcols(gh_empP_ov))
+
+
+ggplot(data_, aes(x=EP_dist, fill = gene_category))+
+  geom_density(alpha =0.5) +
+  scale_color_manual(values = brewer.pal(8, "Set2"))
+
+
+# Try eff_size, combined_score, is_elite
+ggplot(data_, aes(x=gene_category, y=is_elite, fill = gene_category)) +
+  geom_boxplot() +
+  scale_fill_manual(values = brewer.pal(8, "Set3")) +
+  theme_bw()+ 
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", linewidth = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "black", linewidth = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test")
+
+result <- pairwise.wilcox.test(data_$is_elite, data_$gene_category)
+print(result)
+
+
+
+ggplot(data_, aes(x=gene_category, y=EP_dist, fill = gene_category)) +
+  geom_boxplot() +
+  scale_fill_manual(values = brewer.pal(8, "Set3")) +
+  theme_bw()+ 
+  # scale_y_continuous(labels=fancy_scientific) +
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", linewidth = 0.4, show.legend = FALSE)+
+  stat_summary(fun = "mean", geom = "crossbar", color = "black", linewidth = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test", paired = FALSE) +
+  ylim(0, 10**6)
+
+result <- pairwise.wilcox.test(data_$EP_dist, data_$gene_category)
+print(result)
+```
+
+Summarising per transcript
+```{r}
+data_ <- as.data.frame(mcols(gh_empP_ov))%>%
+  group_by(ensembl) %>%
+    summarise(min_EP_dist = min(EP_dist),
+    max_EP_dist = max(EP_dist),
+    enh_count = n(),
+    median_EP_dist = median(EP_dist),
+    gh_score_mean = mean(combined_score),
+    is_elite_median = median(is_elite),
+    is_elite_mean = mean(is_elite),
+    eff_size_mean = mean(eff_size),
+    r_mean = mean(spearman_r),
+    E_active = median(E_active),
+    empP_median = median(empP))
+
+
+
+# SOme genes have transcripts that are out of GRBs so they appear two times
+# As GRB bystander and grb out. Solve this maybe- but this is the case with ~50 genes
+# so I don't think it influences the data much
+data_ <- left_join(data_, unique(select(as.data.frame(mcols(gh_empP_ov)), ensembl,gene_category)))
+
+
+ggplot(data_, aes(x=gene_category, y=empP_median, fill = gene_category)) +
+  geom_boxplot() +
+  scale_fill_manual(values = brewer.pal(8, "Set3")) +
+  theme_bw()+ 
+  theme(text = element_text(size = 16))+
+  # scale_y_continuous(labels=fancy_scientific) +
+  stat_summary(fun.data = give.n, geom = "text")+
+  stat_summary(fun = "median", geom = "crossbar", color = "yellow", linewidth = 0.4, show.legend = FALSE)+
+  ylim(0, 0.001) +
+  stat_summary(fun = "mean", geom = "crossbar", color = "black", linewidth = 0.4, show.legend = FALSE) +
+  stat_compare_means(method = "wilcox.test", paired = FALSE)
+ggsave(file.path(project_dir, outputs_dir, "gh_plots/gh_empP_ov_transcript_summarised_trgt_comparison_boxplot_empP_mean.png"))
+
+result <- pairwise.wilcox.test(data_$enh_count, data_$gene_category)
+print(result)
+
+```
+
+Nekakvi plotovi za širinu enhancera
+```{r}
+gh_bed <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_hg19_v5.16.bed"))
+gh_tissues <- read.table(file.path(project_dir, inputs_dir, "geneHancer/GeneHancer_AnnotSV_tissues_v5.16.txt"),
+  header = TRUE, sep = "\t")
+
+print(table(gh_tissues$source))
+
+gh_bed_toplot <- gh_bed %>%
+  filter(is.element(V4, filter(gh_tissues, duplicated(GHid))$GHid)) %>%
+  filter(is.element(V4, filter(gh_tissues, source == "FANTOM5")$GHid)) %>%
+  mutate(width = abs(V2-V3))
+dim(gh_bed_toplot)
+
+hist(gh_bed_toplot$width, xlim = c(0,6500), breaks = 1000, main="VISTA enhancer",
+    cex.lab = 1.5,
+    cex.axis = 1.5,
+    cex.main = 1.5,
+    cex.sub = 1.5)
+
+
+```
+
+```{r}
 
 ```
 
