@@ -1,0 +1,37 @@
+
+1)	# Follow workflow on https://cran.r-project.org/web/packages/snpsettest/vignettes/reference_1000Genomes.html
+	# Download hg37 data from https://www.cog-genomics.org/plink/2.0/resources#1kg_phase3
+	# be careful to select the correct ensemble
+        # create folder workdir/input and go thither
+
+2)	plink2 --zst-decompress all_phase3.pgen.zst > all_phase3.pgen
+
+3)	qsub plink_job.sge
+	# this selects the correct population (EUR) and generates subpopulations
+	# it also transforms the output to Plink1 format
+
+3)	qsub plink1_job.sge
+	# this calculates linkage disequillibrium blocks
+	# it also transforms the output to Granges
+
+5)	python make_bed.py
+	# create bed files from plink
+
+6)	# concatenate all .bed files using `cat` command to out/EUR_phase3_chrALL.bed
+
+7)	python gwas_associations.py
+	# this generates gwas_associations_LDblock.csv
+
+8)	qsub make_gwas_snp_in_grb.sge
+	# this runs gwas_snps_in_grb.R or gwas_snps_in_grb_no_kurtosis.R
+	# you need to select kurtosis or no_kurtosis by changing the script name in .sge script
+
+9)	# create directories for plots
+	mkdir plots
+	mkdir plots/expression_pairs
+	mkdir plots/gviz_plots
+
+10)	qsub make_gviz.sge
+
+11)	qsub make plots.sge
+

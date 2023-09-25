@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#$ -N gNoK21EUR
+#$ -cwd
+#$ -m bae
+#$ -M dalibor.hrsak@irb.hr
+
+export RSCRIPT="/home/dhrsak/MyPrograms/miniconda3/envs/targPred/bin"
+export PATH=$PATH:$RSCRIPT
+
+Rscript locus_summary_plots_gviz.R
