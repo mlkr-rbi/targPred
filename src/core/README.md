@@ -1,4 +1,6 @@
+
 # targPred workflow
+
 This workflow includes calculating LD blocks from GWAS data, assigning GWAS and GRB target genes to SNPs and creating plots 
 
 
