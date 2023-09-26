@@ -3,6 +3,13 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 25.09.2023.
+_Katarina_
+
+Filip showcased his recent work with transformer models train on genomic sequences. He used (or fine-tuned) [The Nucleotide Transfomrer](https://www.biorxiv.org/content/10.1101/2023.01.11.523679v1) model for classificaton of enhancers and promoters in order to find sequence features that distinct them. He selected layers form the classification model and plotted them with their labels in an interactive scatterplot [Altair](https://altair-viz.github.io/). He further showed a paper [HyenaDNA](https://arxiv.org/abs/2306.15794) which is a ("foundational") transfomrer model that has a large receptive field (1Mb) and a one nucleotide resolution. They have a different approach than The Nucleotide Transformer for adapting the model for different tasks which required fine-tuning, while HyenaDNA does prompt tuning. 
+
+Dalibor is preparing SOMs with enhancers across all tissues from FANTOM5. 
+
 ## sastanak 11.09.2023.
 _Katarina_
 
