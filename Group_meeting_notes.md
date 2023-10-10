@@ -3,6 +3,17 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+
+## sastanak 10.10.2023.
+_Katarina_
+
+Dalibor performed hierarchical clustering of tissue samples from FANTOM5 enhacner datasets using cluster package from R.
+He prepared SOM outputs and cells with number of enhancers per cells and also labeld with superclasses. There are a couple of superclasses with a okay number of enhancers. Some superclasses cointain one cell with only one enhancer. Additionally, sorted samples (colnames) by hierarchical clustering and for each superclass we have bar plots that contain median of all enhancers across tissues from superclass. For next time, increase fontsize of all axis labels, y axis to log scale, additionally prepare three different SOM grids 6x6, 8x8 and 12x12 with two different superclustering methods (PAM and hierarchical). 
+
+Filip is making entries to the manuscript. And his todo is to write the methodology for targPred.
+
+Katarina has to fix byGRB list, check why there are samples that appear in multiple pooled samples and then finish her parts from the paper. 
+
 ## sastanak 25.09.2023.
 _Katarina_
 
@@ -41,10 +52,10 @@ _Katarina_
 Nakon što pripremi SNP-ove će te varijante provući kroz čitav targPred što uključuje računje LD blokova. To će zahtijevati prilagodbu nekih dijelova koda… 
 
 @Katarina pokazala neke talk-ove koji su potencijalno zanimljivi, poput modela koji predviđa CAGE signal. Jedan poster je pokazao da enformer ne gleda enhancer regije za predviđanje gene expression. Spominjao se [Gasperini et al (2019) CRISPRi dataset]([url](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6690346/)) koji je kandidat za JC. Slajdove i bilješke će biti prebačene u shared drive.   
-- [ ] Napraviti folder u shareanom drive-u sa slajdovima i bilješkama relevantnih prezentacija s ISCB/ECCB
+- [x] Napraviti folder u shareanom drive-u sa slajdovima i bilješkama relevantnih prezentacija s ISCB/ECCB
 
 @svi Početi popunjavati dijelove paper-a. Dodali smo neke stvari, malo izmjenili raspored i izdelegirali paragrafe. Odredili smo 16. Ili 17.08. Za sljedeći sastanak na kojem ćemo raspraviti o update-u. 
-- [ ]  Do 16. ili 17.08. Napraviti neki entry za paper. [Link na overleaf]([url](https://www.overleaf.com/project/6409fa3589bb0064d5cdfea0))
+- [x]  Do 16. ili 17.08. Napraviti neki entry za paper. [Link na overleaf]([url](https://www.overleaf.com/project/6409fa3589bb0064d5cdfea0))
 
 @Miha Ideja korištenje LLM-a i prompt engineering za izvlačenje dijagnoza i drugih informacija iz free format teksta u neki standardizirani oblik. Isprobati to u kontekstu uzoraka pacijenata i exomskih sekvenci sa MEF-a. Generalizirati za sve nalaze iz BIS-ova. 
 
