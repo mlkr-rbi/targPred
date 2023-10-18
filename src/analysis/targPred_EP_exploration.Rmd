@@ -53,7 +53,7 @@ elements:
 by_GRB_list <- readRDS(file.path(project_dir, inputs_dir, "targPred_byGRB_list_wEnhancers_GeThesisTargets_FANTOM5.rds"))
 # by_GRB_list <- readRDS(file.path(project_dir, processed_dir, "byGRB_list.rds"))
 # Third version of the byGRB_list with CNE density GRBs and plink loci
-# by_GRB_list <- readRDS( file = file.path(project_dir, processed_dir, "byGRB_list_cneDensityGRB_plinkLoci.rds"))
+by_GRB_list <- readRDS( file = file.path(project_dir, outputs_dir, "byGRB_list_plink_updated.rds"))
 
 # enhancer_transcript_df with ranges, Provided by Filip - mail
 enh_trans_ranges <- readRDS(file = file.path(project_dir, inputs_dir, "enh_trans_ranges.rds"))
@@ -156,7 +156,7 @@ Additional features:
 
 Looping through all grb's in the by_GRB_list to fetch all df.
 ## Creating enhancer_transcript_df
-```{r CREATE enhancer_transcript_df, eval=FALSE}
+```{r CREATE enhancer_transcript_df, eval=TRUE}
 enhancer_transcript_df <- data.frame()
 empty_grbs <- c()
 for(i in 1:length(by_GRB_list)){
@@ -422,6 +422,7 @@ This is the same plot ANja provided for whole GWAS
 ggplot(enhancer_transcript_df, aes(x=category, y=emp, fill=category)) +
   scale_fill_manual(values = GRB_CAT_COLORS)+
   theme_minimal()+
+  ylim(0,1)+
   stat_ydensity() +
   stat_summary(fun.data = give.n, geom = "text", fun.max = - 0.2)+
   stat_summary(fun = "mean", geom = "crossbar", color = "black", size = 0.4, show.legend = FALSE)

@@ -144,27 +144,28 @@ makeBed <- function(gr, name = FALSE, filename,
 # (iii) 'GWAS-byst' for all other GWAS-associated genes
 # (iv) 'GRB-trgt' for all other target genes predicted in that GRB (not previously associated)
 # (v) 'GRB-byst' all other genes in that GRB (not previously associated and not target genes)
-per_GRB_genes_classification <- function(current_GRB, loci.gr) {
+per_GRB_genes_classification <- function(current_GRB, loci.gr, genes.hg19.ensembl) {
   
   current_loci <- subsetByOverlaps(loci.gr, current_GRB)
   current_chr <- as.character(seqnames(current_loci))[1]
   g <- subsetByOverlaps(genes.hg19.ensembl, current_GRB)
   
-  # add GRB genes
+  # All genes in a GRB 
   genes.df <- data.frame(ens=names(g),
                          strt=start(g),
                          symbol=g$hgnc_symbol,
                          #category=character(length(g)), # category is added in GWAS step
                          stringsAsFactors=F)
   rownames(genes.df) <- as.character(g)
-  
-  # add GWAS genes
+
+  # add GWAS genes 
   if(any(str_length(current_loci$GWAS_GENES)>0)) {
     #symb <- unique(unlist(str_split(current_loci$gwas_genes, ",")))
     symb <- unique(unlist(str_split(current_loci$GWAS_GENES, ",")))
-    symb <- symb[-which(symb=="")]
+    symb <- symb[symb!=""]
     gwas <- data.frame(symbol=symb)
     
+    # Mapping ensembl gene names based on hgnc symbol gene names
     gwas$ensembl <- sapply(gwas$symbol, function(x) {
       # it can be one-to-one, one-to-many and one-to-none mapping
       a <- names(genes.hg19.ensembl[genes.hg19.ensembl$hgnc_symbol==x & as.character(seqnames(genes.hg19.ensembl))==current_chr])
@@ -182,23 +183,25 @@ per_GRB_genes_classification <- function(current_GRB, loci.gr) {
       }
     })
     gwas <- na.omit(gwas)
+    
     # first see if GWAS genes are in GRB or not
     gwas$in_GRB <- ifelse(gwas$ensembl %in% genes.df$ens, "GWAS-in", "GWAS-out")
     gwas$start <- sapply(gwas$symbol, function(h) {
       start(genes.hg19.ensembl[genes.hg19.ensembl$hgnc_symbol==h])
     })
-    
     genes.df <- merge(genes.df, gwas, by.x=c(1,3,2), by.y=c(2,1,4), all=T)
+
     colnames(genes.df)[4] <- "category"
     genes.df$category[which(is.na(genes.df$category))] <- ""
   }
   else {
     genes.df$category <- ""
   }
-  
+
   # add target genes
-  target <- data.frame(symbol=unlist(str_split(current_loci$GWAS_GENES, ",")), 
+  target <- data.frame(symbol=unlist(str_split(current_loci$GRB_GENES, ",")), 
                        stringsAsFactors=F)
+
   target$category <- sapply(target$symbol, function(x) {
     cat <- ifelse(genes.df$category[genes.df$symbol==x]=="GWAS-in", "GWAS-trgt", "GRB-trgt")[1]
   })
