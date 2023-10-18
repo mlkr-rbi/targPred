@@ -1,7 +1,8 @@
 
 # targPred workflow
 
-This workflow includes calculating LD blocks from GWAS data, assigning GWAS and GRB target genes to SNPs and creating plots 
+This workflow includes calculating LD blocks from GWAS data, assigning GWAS and GRB target genes to SNPs and creating plots.
+
 The scripts with .sge extensions are to be used with the Son of Grid Engine in a job scheduling HPC cluster setting.
 
 ## 1) Preparing 1000Genomse data for calculating LD blocks
