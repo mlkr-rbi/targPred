@@ -11,7 +11,7 @@ Follow workflow on https://cran.r-project.org/web/packages/snpsettest/vignettes/
 
 Download hg37 data from https://www.cog-genomics.org/plink/2.0/resources#1kg_phase3
 
-Be careful to select the correct ensemble (hg19/GRCh27)
+Be careful to select the correct ensemble (hg19/GRCh37)
 Create folder workdir/input and go thither
 
 ## 2)	Preprocessing 1000genomes data
@@ -46,9 +46,9 @@ gwas_associations.py
 ```
 
 ## 8) Overlapping GWAS variants with GRBs
-This runs `gwas_snps_in_grb.R` or `gwas_snps_in_grb_no_kurtosis.R`
+This runs `gwas_snps_in_grb.R` or `gwas_snps_in_grb_with_kurtosis.R`
 
-You need to select kurtosis or no_kurtosis by changing the script name in .sge script.
+You need to select kurtosis or without by changing the script name in .sge script.
 ```
 qsub make_gwas_snp_in_grb.sge
 ```
