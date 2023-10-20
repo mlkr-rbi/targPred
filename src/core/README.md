@@ -66,7 +66,7 @@ qsub make_gviz.sge
 ```
 
 ## 11) Make beanplots
-Beanplots show transcirpt expression depending on corresponding nhancer activity and empirical p value association. 
+Beanplots show transcirpt expression depending on corresponding enhancer activity and empirical p value association. 
 ```
 qsub make_plots.sge
 ```
