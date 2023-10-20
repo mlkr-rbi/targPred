@@ -5,7 +5,7 @@ This workflow includes calculating LD blocks from GWAS data, assigning GWAS and 
 
 The scripts with .sge extensions are to be used with the Son of Grid Engine in a job scheduling HPC cluster setting.
 
-## 1) Preparing 1000Genomse data for calculating LD blocks
+## 1) Preparing 1000Genomes data for calculating LD blocks
 
 Follow workflow on https://cran.r-project.org/web/packages/snpsettest/vignettes/reference_1000Genomes.html
 
