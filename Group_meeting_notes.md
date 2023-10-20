@@ -3,6 +3,12 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 19.10.2023.
+_Katarina_
+
+We discussed about writing the methods for the paper. Filip has a task to try and write out the workflow from the src/core and any missing things he should ping group members to fill out the unknowns. 
+
+Katarina prepared a EP interaction html with an analysis of EP number of interaction, distance and distribution of p-values. Also, Katarina has a task to make the empP calculation into a two-tailed test. 
 
 ## sastanak 10.10.2023.
 _Katarina_
