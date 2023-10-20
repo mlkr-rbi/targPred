@@ -47,7 +47,7 @@ gwas_associations.py
 
 ## 8) Overlapping GWAS variants with GRBs
 This runs `gwas_snps_in_grb.R` or `gwas_snps_in_grb_with_kurtosis.R`
-
+[Potreban je detaljniji opis ovog: vrlo dugačka skripta gwas_snps_in_grb.R u odnosu na ostale, izvor podataka za traget gene u GRB] 
 You need to select kurtosis or without by changing the script name in .sge script.
 ```
 qsub make_gwas_snp_in_grb.sge
