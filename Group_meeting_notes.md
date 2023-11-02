@@ -3,6 +3,19 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 02.11.2023.
+_Katarina_
+
+Dalibor SOMs - pasted tissue names on the unique IDs. (We should check Katarinas list for duplicate names). Send the clustering script to everyone, prepare the averege expression plots by supercalsses vertically for better visualization. Prepare powerpoint slides wiht same SOM clustering results with different grids and superclustering methods.  
+For 8x8 and 12x12 grids 
+- more and less superclasses
+- different PAM and heierarchical
+Also by considering SOM evaluation metrics and the okay results are 8x8 but much better at 10x10.
+
+Katarina - preparing twotailed tests. The results do not show bimodal p-values anymore. Added wilcoxon and t.test but slows down things significantly so find ways to speed this up.
+
+Miha - preparing slides for javni razgovor
+
 ## sastanak 19.10.2023.
 _Katarina_
 
