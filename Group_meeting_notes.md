@@ -3,6 +3,12 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 13.11.2023.
+_Katarina_
+
+Dalibor SOMs - We decided  that we will proceded with 12x12 PAM and 24 superclasses. Dalibor also prepared bar plots with medain expression numbers per superclass. We noticed that some of the superclasses in the left upper corner are mostly enhancers expressed in immunological cell types and lines. For the next meeting Dalibro will add number of enhancer in the median bar plots. 
+
+
 ## sastanak 02.11.2023.
 _Katarina_
 
