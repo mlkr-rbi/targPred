@@ -3,6 +3,16 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 27.11.2023.
+_Dalibor_
+
+- napravljena je analiza pojačivača u GRB-u. za svaku ćeliju iz SOM-a 12x12 i 24 PAM superklase je izračunan postotak pojačivača u GRB-u. Pridruženi su pojedini GRB-i svakom pojačivaču, kao i povezani geni
+
+- rezultati su u /storage/PROJECTS/targPred/dalibor/targPred/GRB_vs_SOM/ 
+
+- sljedeće treba reducirati fantom5, tj. odbaciti sve pojačivače s razinom ekspresije višom od 100, te epidermis jezika kao tkivo, te ponovno istrenirati SOM na takvom skupu
+- takodjer treba razdvojiti povezane gene iz GRB-a na *bystander* i *target* gene, te povezati pojačivače s podatcima iz GO
+
 ## sastanak 13.11.2023.
 _Katarina_
 
