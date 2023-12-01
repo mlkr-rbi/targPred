@@ -15,7 +15,7 @@
 #BiocManager::install("IRanges")
 #BiocManager::install("GenomicRanges")
 
-
+#### Libraries #####
 library(tidyverse)
 library(GenomicRanges)
 library(rtracklayer)
@@ -39,26 +39,21 @@ source(file.path(core_dir, "utils.R"))
 
 
 
-# Loading data
+#### Loading data #####
 aux_dir <- "../aux_files"
 
 # Output from gwas_associations.py
- gwas <- read.csv(file.path(data_dir, "outputs", "gwas_associations_LDblock.csv"))
-   
- 
-# Main GRB dataset
-cne_density_grb <- 
-  import.bed(file.path(data_dir, "inputs","hg19.canFam3.98.50.processed.threshold.grbs.bed")) %>%
-  # Reducing since some GRBs overlap- Look at CNE_density_overlapping_GRBs.txt for examples
-  GenomicRanges::reduce()
+gwas <- read.csv(file.path(data_dir, "outputs", "gwas_associations_LDblock.csv"))
 
-# Modifing because granges have 1 base and bed files are 0 based
-start(cne_density_grb) = start(cne_density_grb) -1
+grbs <- readRDS(file.path(data_dir, "processed", "GRBs_with_targets.gr.rds"))
+ 
 
 # Target genes for CNE density GRBs 
 target_genes <- 
   read.csv(file.path(data_dir, "inputs","hg19.canFam3.tsv"), sep = "\t", header = TRUE)
 
+# Downloaded efo terms for trait separating
+efo_terms <- readRDS(file.path(data_dir, "inputs","EFO_terms.rds"))
 
 # Helper functions
 grangesFromDataframe <- function(data, colName, keep_metadata=TRUE){
@@ -82,7 +77,9 @@ grangesFromDataframe <- function(data, colName, keep_metadata=TRUE){
   return(data_r)
 }
 
-# Preprocessing gwas data
+ 
+### Modifying genes from gwas data #####
+# Gwas catalog stores the putative target gene of an SNP in two columns: (from https://www.ebi.ac.uk/gwas/docs/fileheaders ) REPORTED GENE(S): Gene(s) reported by author MAPPED GENE(S): Gene(s) mapped to the strongest SNP. If the SNP is located within a gene, that gene is listed. If the SNP is located within multiple genes, these genes are listed separated by commas. If the SNP is intergenic, the upstream and downstream genes are listed, separated by a hyphen. - Combine the two columns in a single column GWAS_genes
 
 non_gene_names <- c("",NA,"intergenic","Intergenic", "NR")
 gwas <- 
@@ -99,52 +96,12 @@ gwas <- gwas %>%
   mutate(GWAS_GENES = map_chr(str_split(temp, ", "), ~str_c(unique(.x),collapse = ", "))) %>%
   dplyr::select(-c(temp, REPORTED.GENE.S., MAPPED_GENE))
 
-## gwas_gr stores SNP LD blocks in GenomicRanges object
-gwas_gr <- grangesFromDataframe(gwas, LDblock)
 
+### Separating Traits ####
+# Each investigated SNP has an associated mapped trait, or multiple. Since our goal is to explore the relationship between a SNP and a single trait row separation based on trait is required. Trait names are stored in MAPPED_TRAIT and the URI that contain unique disease/trait ontology id in MAPPED_TRAIT_URI. Traits are comma separated but some trait names contain commas. To avoid error prone case by case exceptions, trait separation will be based on the URI and trait names will be cross mapped from the ontology.
 
-# Building target gene GRanges
-target_genes_gr <- grangesFromDataframe(target_genes,
-                                        colName =ucscCoordinates.hg19)
-
-# Adding target genes as metadata to grb
-cne_density_grb <- 
-  plyranges::join_overlap_left(cne_density_grb, target_genes_gr) %>%
-  # Using dplyr to merge multiple targets in GRBs
-  as.data.frame() %>%
-  dplyr::group_by(start, end) %>%
-  # Concatenating all these cols from metadata
-  mutate(ENSEMBLGeneID = paste0(ENSEMBLGeneID, collapse = ", "),
-         geneName = paste0(geneName, collapse = ", "),
-         originalSupport = paste0(originalSupport, collapse = ", "),
-         normalisedSupport = paste0(normalisedSupport, collapse = ", "),
-         ucscCoordinates.hg19 = paste0(ucscCoordinates.hg19, collapse = ", ")) %>%
-  unique()%>%
-  ungroup() %>%
-  makeGRangesFromDataFrame(keep.extra.columns = TRUE)
-
-# Overlaping gwas loci with GRBs
-loci_in_GRBs.gr <- subsetByOverlaps(gwas_gr, cne_density_grb)
-ovlp <- findOverlaps(loci_in_GRBs.gr, cne_density_grb)
-
-# Adding GRB coordinates to each locus as character
-loci_in_GRBs.gr$grb.coords[queryHits(ovlp)] <-
-  as.character(cne_density_grb[subjectHits(ovlp)])
-
-# Adding GRB target genes 
-loci_in_GRBs.gr$GRB_GENES[queryHits(ovlp)] <- 
-  cne_density_grb[subjectHits(ovlp)]$geneName
-
-# Saving loci in GRB as bed file for visualizations in Genome browser
-export.bed(loci_in_GRBs.gr, con = file.path(data_dir, "outputs", "loci_in_GRBs.bed"))
-
-
-loci_in_GRBs.df <- mcols(loci_in_GRBs.gr) %>%
-  as.data.frame()
-
-# Separating Traits
 ## Trait ontology contains all GWAS trait EFO IDs extracted from MAPPED_TRAIT_URI
-trait_ontology <- dplyr::select(loci_in_GRBs.df, MAPPED_TRAIT_URI) %>%
+trait_ontology <- dplyr::select(gwas, MAPPED_TRAIT_URI) %>%
   unique()
 rownames(trait_ontology) <- NULL
 trait_ontology <- 
@@ -159,11 +116,8 @@ trait_ontology <-
   filter(MAPPED_TRAIT_URI != "")
 
 
-# Downloaded efo terms
-efo_terms <- readRDS(file.path(data_dir, "inputs","EFO_terms.rds"))
 
-
-## Relabeling Traits
+### Relabeling Traits ####
 # Using trait_ontology dataframe to do this once for each term
 trait_ontology$label <- NA
 
@@ -172,35 +126,66 @@ for(id in 1:length(trait_ontology$EFO_ID)){
   term_id <- str_replace(trait_ontology$EFO_ID[id], "_",":")
   
   # efo_terms is an ontology object which needs the termLabel method to access label
-  tryCatch(trait_ontology$label[id] <- rols::termLabel(efo_terms[term_id]),
-           error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+  tryCatch(trait_ontology$label[id] <- rols::termLabel(efo_terms[term_id]), error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
   
 }
 
 
 
-loci_in_GRBs.df <-
-  loci_in_GRBs.df %>%
+# loci_in_GRBs.df <-
+  # loci_in_GRBs.df %>%
+gwas <-
+  gwas %>%
   # Multiple URIs that correspond to one trait are sep with ","
   separate_rows(MAPPED_TRAIT_URI, sep = ",") %>%
   mutate(MAPPED_TRAIT_URI = stringr::str_trim(MAPPED_TRAIT_URI, side = "both")) %>%
   # Splitting URI slashes since the unique ID is stored in the end
   mutate(MAPPED_TRAIT_ID = str_split(MAPPED_TRAIT_URI, pattern = "/", simplify =TRUE)[,5]) %>%
-  left_join(dplyr::select(trait_ontology, MAPPED_TRAIT_URI, label)) %>%
+  left_join(dplyr::select(trait_ontology, MAPPED_TRAIT_URI, label), by = ("MAPPED_TRAIT_URI")) %>%
   filter(MAPPED_TRAIT_URI != "")
+  
 
 
 
 # Removing the obsolete_ addition from some trait labels
-loci_in_GRBs.df <- 
-  loci_in_GRBs.df %>%
+gwas <-
+  gwas %>%
+  mutate(MAPPED_TRAIT = label) %>%
+  dplyr::select(-label) %>%
   mutate(MAPPED_TRAIT = ifelse(str_detect(MAPPED_TRAIT,"obsolete_"),
                                str_remove(MAPPED_TRAIT, "obsolete_"), 
+                               MAPPED_TRAIT)) %>%
+  mutate(MAPPED_TRAIT = ifelse(str_detect(MAPPED_TRAIT,"obsolete "),
+                               str_remove(MAPPED_TRAIT, "obsolete "), 
                                MAPPED_TRAIT)) %>%
   # Removing NA MAPPED_TRAIT
   filter(!is.na(MAPPED_TRAIT))
   
 
+## gwas_gr stores SNP LD blocks in GenomicRanges object
+gwas.gr <- grangesFromDataframe(gwas, LDblock)
+
+
+## Loci in GRBs ####
+
+# Overlaping gwas loci with GRBs
+loci_in_GRBs.gr <- subsetByOverlaps(gwas.gr, grbs)
+ovlp <- findOverlaps(loci_in_GRBs.gr, grbs)
+
+# Adding GRB coordinates to each locus as character
+loci_in_GRBs.gr$grb.coords[queryHits(ovlp)] <-
+  as.character(grbs[subjectHits(ovlp)])
+
+# Adding GRB target genes 
+loci_in_GRBs.gr$GRB_GENES[queryHits(ovlp)] <- 
+  grbs[subjectHits(ovlp)]$geneName
+
+# Saving loci in GRB as bed file for visualizations in Genome browser
+export.bed(loci_in_GRBs.gr, con = file.path(data_dir, "outputs", "loci_in_GRBs.bed"))
+
+
+loci_in_GRBs.df <- mcols(loci_in_GRBs.gr) %>%
+  as.data.frame()
 
 
 # SNPs in GRBs granges
@@ -245,17 +230,17 @@ TSSs.perTranscript.gr <- readRDS(file.path(data_dir, "processed","TSSs.perTransc
 fantom5.enhancers.tpm.gr <- readRDS(file.path(data_dir, "processed","fantom5.enhancers.tpm.pooled.gr.rds"))
 promoter_cage_tpm_df <- readRDS(file.path(data_dir, "processed","promoter_cage_tpm_df_fixed_pooled.rds"))
 
-grbs <- cne_density_grb
+# grbs <- cne_density_grb
+# 
+# # Adding target genes to GRBs 
+# grbs$targets <- ""
+# for (i in 1:length(grbs)) {
+#   t <- sort(subsetByOverlaps(target_genes_gr, grbs[i]))
+#   if(length(t)>0) {
+#     grbs$targets[i] <- paste(t$geneName, collapse=",")
+#   }
+# }
 
-# Adding target genes to GRBs 
-grbs$targets <- ""
-for (i in 1:length(grbs)) {
-  t <- sort(subsetByOverlaps(target_genes_gr, grbs[i]))
-  if(length(t)>0) {
-    grbs$targets[i] <- paste(t$geneName, collapse=",")
-  }
-}
-saveRDS(grbs, file.path(data_dir, "processed", "GRBs_with_targets.gr.rds"))
 
 # list with gene ids (Anja)
 genes.hg19.ensembl <- readRDS(file.path(data_dir, "processed","genes.hg19.ensembl.rds"))
@@ -269,7 +254,7 @@ grb_subset <- subsetByOverlaps(grbs, loci_in_GRBs.gr)
 grb_subset.df <- data.frame(chr=seqnames(grb_subset),
                             start=start(grb_subset),
                             end=end(grb_subset),
-                            targets=grb_subset$targets,
+                            targets=grb_subset$geneName,
                             stringsAsFactors=F)
 
 grb_subset.df <-
@@ -319,7 +304,8 @@ for (i in 1:length(grb_subset)) {
   #                                     loci.gr, 
   #                                     TSSs.perTranscript.gr)
 }
-# Last
+### Saving data ####
+write.csv(gwas, file = file.path(data_dir,"outputs", "gwas_associations_LD_processed.csv"))
 saveRDS(byGRB_list, file = file.path(data_dir,"outputs","byGRB_list_plink_updated.rds"))
 # saveRDS(loci_in_GRBs.gr, file.path("loci_in_GRBs.gr.rds"))
 # Save as outputs table
