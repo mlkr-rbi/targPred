@@ -5,6 +5,7 @@ Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zab
 
 ## sastanak 05.01.2024.
 _Katarina_
+
 **Phenotpes with LRR**
 Using LD blocks for SNPs from the whole GWAS catalog (2021), that overlap enhancers (fantom5 enhancers) were separated into two categories: inGRB and outGRB. For each locus there are multiple EP interactions (limited to interactons with significance levels empP<0.05). For each trait and their loci EP distances (outGRB versus inGRB) were tested using Wilcoxon rank sum test, and corrected for multiple testing with bonferroni. The resulting table should indicate traits with LRR in GRBs. 
 
