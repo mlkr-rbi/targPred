@@ -93,7 +93,7 @@ gwas <- gwas %>%
                                 is.element(MAPPED_GENE, non_gene_names) ~ REPORTED.GENE.S.,
                                 TRUE ~ str_c(REPORTED.GENE.S., MAPPED_GENE, sep = ", "))) %>%
   # Removing repeated genes (eg. SKIV2L, SKIV2L, SKIV2L, SKIV2L, SKIV2L, SKIV2L)
-  mutate(GWAS_GENES = map_chr(str_split(temp, ", "), ~str_c(unique(.x),collapse = ", "))) %>%
+  mutate(GWAS_GENES = map_chr(str_split(temp, ", |;"), ~str_c(unique(.x),collapse = ", "))) %>%
   dplyr::select(-c(temp, REPORTED.GENE.S., MAPPED_GENE))
 
 

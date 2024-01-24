@@ -5,6 +5,7 @@
 library(plyranges)
 library(GenomicRanges)
 library(dplyr)
+library(rtracklayer)
 
 core_dir <- "/home/katarina/MyProjects/targPred/src/core"
 data_dir <- "/home/katarina/MyProjects/targPred/data"
