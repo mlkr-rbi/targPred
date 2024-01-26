@@ -3,13 +3,47 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 26.01.2024.
+_Katarina_
+
+**Anja** 
+* Submitted the annual project report (each group member could read the report to get a feeling of how te project stands)
+*  One task that included adding on-the-fly option for targPred dataset was abandoned, and insted Filip will focus on redefining enhancers with genomic LLMs
+*  Another task that should be done is integrating other data sources for defining enhancer-promoter interactions i.e. Roadmap, Hi-C (Radina did this), GTEx, STAR-seq. Also there are resources that already incorported this such as OpenTargets and GeneHancer. 
+
+
+**Filip** 
+* Compared epiEnh with non-epiEnh SNPs and their respective TFBS. The results indicate show developmental TFs in the epiEnh group.
+* Next task is to make an enrichment analysis on GO ontology of those TFs, the background used should be constrained only on TFs.
+* Will update the About page on targPred platform. 
+
+**Katarina**
+* Needs to test if trait associated SNPs are more likely to appear in GRBs with genome shuffling.
+* Additonally, consider revisiting ClinVar coding variants and their ontology to expand the ontology connection. 
+
+**Dalibor**
+* Incorporated eniEnh data set into SOM results.
+* Consider preparing a swarm (box, violin) plot of fractions of the epiEnh dataset per superclass. 
+
+**Miha** 
+* Is preparing a review paper about NSAI for a conference.
+* Evaluate the about page from targPred. 
+
+**General**
+* Anja, Filip and Katarina should map out the thesis topics
+* Plan out tasks for writing the targPred paper
+* Book conferences, educations
+* Half-project meeting
+* Look up books
+
 ## sastanak 05.01.2024.
 _Katarina_
 
 **Phenotpes with LRR**
+
 Using LD blocks for SNPs from the whole GWAS catalog (2021), that overlap enhancers (fantom5 enhancers) were separated into two categories: inGRB and outGRB. For each locus there are multiple EP interactions (limited to interactons with significance levels empP<0.05). For each trait and their loci EP distances (outGRB versus inGRB) were tested using Wilcoxon rank sum test, and corrected for multiple testing with bonferroni. The resulting table should indicate traits with LRR in GRBs. 
 
-The list of traits grom the GWAS catalog should be annotated and grouped into diseases and traits that are a type of measurement. The latter are traits that contain words such as: measurement, count, volume, index, width, age at, etc. This should be performed using EFO identifiers and searching parent terms that may unambiguously separate the two groups. It's worth checking out if a good grouping can be obtained by searching parent terms of identifeiers material property (these should be disease) or information entitiy (these should be measurements). A possible way is to use [rols library for R]([url](https://bioconductor.org/packages/release/bioc/vignettes/rols/inst/doc/rols.html)).
+The list of traits from the GWAS catalog should be annotated and grouped into diseases and traits that are a type of measurement. The latter are traits that contain words such as: measurement, count, volume, index, width, age at, etc. This should be performed using EFO identifiers and searching parent terms that may unambiguously separate the two groups. It's worth checking out if a good grouping can be obtained by searching parent terms of identifeiers material property (these should be disease) or information entitiy (these should be measurements). A possible way is to use [rols library for R]([url](https://bioconductor.org/packages/release/bioc/vignettes/rols/inst/doc/rols.html)).
 
 
 
