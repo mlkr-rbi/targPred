@@ -2,13 +2,31 @@
 # Combining GRBs from bed file and target genes to make a GRanges 
 
 
+library(tidyverse)
 library(plyranges)
 library(GenomicRanges)
 library(dplyr)
 library(rtracklayer)
 
-core_dir <- "/home/katarina/MyProjects/targPred/src/core"
-data_dir <- "/home/katarina/MyProjects/targPred/data"
+path_file <- "paths.txt"
+path_vector <- readr::read_lines("paths.txt")
+directory_type <- ""
+data_dir <- ""
+
+for (idx in 1:length(path_vector)) {
+    line_vector <- strsplit(path_vector[idx],"")
+    if (line_vector[[1]][1] == "$") {
+        directory_type <- paste(line_vector[[1]][-1], collapse = "")
+        next
+    } else {
+        if (directory_type == "data") data_dir <- path_vector[idx]
+    }
+}
+
+if (data_dir == "") {
+    print("ERROR: data_dir not defined in paths.txt!")
+    quit(status=1)
+}
 
 # Helper functions
 grangesFromDataframe <- function(data, colName, keep_metadata=TRUE){

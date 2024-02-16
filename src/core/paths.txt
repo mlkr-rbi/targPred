@@ -1,0 +1,14 @@
+$core
+/path/to/your/code
+$data
+/path/to/your/data
+$work
+/path/to/your/workdir
+$empP_dir
+dirname_with_empP_files
+$empP
+prefix_of_empP_files
+$year
+is it 2021 or 2022?
+$byGRB_name
+name_of_byGRB_list.rds
