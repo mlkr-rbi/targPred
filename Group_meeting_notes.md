@@ -3,8 +3,27 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 22.02.2024.
+_Katarina_
+
+Napraviti poseban branch za sve prezentacije, postere i predavanja. U naslov bi trebao biti timestamp i za koga je bila prezentacija. Timestamp u obliku godina-mjesec (npr. 2024_02_ZEL_seminar). 
+
+Consider a visit to Davor Lessel lab to Salzburg. 
+
+**Dalibor**
+
+Preparing powerpoint for JC. 
+
+**Katarina**
+Add genome shuffling data for metabolic syndromes and cardiac.
+
+**Filip**
+
+Prepared tensor board tool for visualization dimensionality reduction methods. 
+
 ## sastanak 26.01.2024.
 _Katarina_
+
 
 **Anja** 
 * Submitted the annual project report (each group member could read the report to get a feeling of how te project stands)
