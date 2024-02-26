@@ -10,5 +10,7 @@ $empP
 prefix_of_empP_files
 $year
 is it 2021 or 2022?
+$LDblock_path
+/full/path/to/LDblock/file
 $byGRB_name
 name_of_byGRB_list.rds

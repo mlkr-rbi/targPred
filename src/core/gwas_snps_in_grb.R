@@ -30,7 +30,7 @@ work_dir <- ""
 data_dir <- ""
 empP_dir <- ""
 gwas_year <- ""
-LDblock_name <- ""
+LDblock_path <- ""
 byGRBlist_name <- ""
 
 for (idx in 1:length(path_vector)) {
@@ -47,7 +47,7 @@ for (idx in 1:length(path_vector)) {
         if (directory_type == "data") data_dir <- path_vector[idx]
         if (directory_type == "year") gwas_year <- path_vector[idx]
         if (directory_type == "empP_dir") empP_dir <- path_vector[idx]
-        if (directory_type == "LDblock_name") LDblock_name <- path_vector[idx]
+        if (directory_type == "LDblock_path") LDblock_path <- path_vector[idx]
         if (directory_type == "byGRB_name") byGRBlist_name <- path_vector[idx]
     }
 }
@@ -68,9 +68,9 @@ if (core_dir == "") {
     print("ERROR: gwas_year not defined in paths.txt!")
     quit(status=1)
 }
-if (LDblock_name == "") {
-    print("LD block file name is default EUR_phase3_chrALL.bed")
-    LDblock_name <- "EUR_phase3_chrALL.bed"
+if (LDblock_path == "") {
+    print("ERROR: full path to bed file with LD blocks not defined in paths.txt!")
+    quit(status=1)
 }
 if (byGRBlist_name == "") {
     print("byGRB_list name is default byGRB_list.rds")
@@ -84,7 +84,7 @@ setwd(work_dir)
 # create GWAS associations here instead of a separate Python script
 
 gwas_associations <- readRDS(file.path(data_dir, "inputs", paste0("gwas_catalog_",gwas_year),"gwas_associations.rds"))
-gwas_snps_LDblocks = read.csv(file.path(data_dir,"out",LDblock_name),sep="\t",header=FALSE)
+gwas_snps_LDblocks = read.csv(file.path(LDblock_path),sep="\t",header=FALSE)
 colnames(gwas_snps_LDblocks) <- c("chromosome","min_loc","max_loc","SNPS")
 gwas_snps_LDblocks <-
   gwas_snps_LDblocks %>%

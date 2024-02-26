@@ -1,9 +1,9 @@
 #!/bin/bash
 
-#$ -N tPredJOB
+#$ -N targPred
 #$ -cwd
 #$ -m bae
-#$ -M username@email.com
+#$ -M user.name@email.com
 
 export RSCRIPT="/path/to/your/Rscript/executable"
 export PATH=$PATH:$RSCRIPT

@@ -1,0 +1,113 @@
+#!/bin/bash
+
+#$ -N plink4tP
+#$ -cwd
+#$ -m bae
+#$ -pe mpi 8
+#$ -M user.name@email.com
+
+SNPLIST=path/to/snp_list.txt
+
+export PLINK="/path/to/your/PLINK"
+export PATH=$PATH:$PLINK
+
+export PLINK2="/path/to/your/PLINK2"
+export PATH=$PATH:$PLINK2
+
+INTERPRETER="/path/to/your/python"
+
+echo "-----starting to download dataset----"
+
+# The links in here may be changed in future
+# "-O" to specify output file name
+wget -O all_phase3.psam "https://www.dropbox.com/s/6ppo144ikdzery5/phase3_corrected.psam?dl=1"
+wget -O all_phase3.pgen.zst "https://www.dropbox.com/s/y6ytfoybz48dc0u/all_phase3.pgen.zst?dl=1"
+wget -O all_phase3.pvar.zst "https://www.dropbox.com/s/odlexvo8fummcvt/all_phase3.pvar.zst?dl=1"
+
+# Decompress pgen.zst to pgen
+plink2 --zst-decompress all_phase3.pgen.zst > all_phase3.pgen
+
+echo "-----finished downloading the dataset----"
+
+echo "-----extracting the desired population----"
+
+POP="EUR"
+
+plink2 --pfile all_phase3 vzs --chr 1-22 --output-chr 26 --max-alleles 2 --rm-dup exclude-mismatch --set-missing-var-ids '@_#_$1_$2' --make-pgen --allow-extra-chr --new-id-max-allele-len 500 --out all_phase3_autosomes
+
+# Prepare sub-population filter file
+# here $6 == CEU or IBS or whatever
+# but $5 == EUR
+awk 'NR == 1 || $5 == "EUR" {print $1}' all_phase3.psam > ${POP}_1kg_samples.txt
+
+# Generate sub-population fileset
+plink2 --pfile all_phase3_autosomes --keep ${POP}_1kg_samples.txt --make-pgen --allow-extra-chr --new-id-max-allele-len 500 --out ${POP}_phase3_autosomes
+
+echo "-----finished extracting the desired population----"
+
+echo "-----separating the data by chromosome and running LD block calculations----"
+
+# prepare plink2 output for plink
+plink2 --pfile ${POP}_phase3_autosomes --maf 0.005 --make-bed --allow-extra-chr --new-id-max-allele-len 500 --out ${POP}_phase3_autosomes
+
+mkdir plink_files ld_blocks
+
+for i in {1..22}
+do 
+    NAME=${POP}_phase3_chr${i}
+    plink2 --bfile ${POP}_phase3_autosomes --chr $i --make-bed --allow-extra-chr --new-id-max-allele-len 500 --out plink_files/${POP}_phase3_chr$i
+    plink --bfile plink_files/${NAME} --r2 --ld-snp-list ${SNPLIST} --ld-window-kb 500 --ld-window 99999 --ld-window-r2 0.6 --noweb --allow-extra-chr --out ld_blocks/${NAME}
+done
+
+echo "-----LD block calculation finished----"
+
+echo "-------creating BED files with LD blocks for targPred--------"
+
+cd ld_blocks
+
+cat << EOF > make_bed.py
+import os
+import sys
+import numpy as np
+import math
+import pandas as pd
+
+def readCSV(filename,separator):
+    try:
+        # Read in DataSet as DataFrame
+        df = pd.read_csv(filename,sep=separator, header=0)
+    except FileNotFoundError:
+        sys.stderr.write(f"ERROR: the file {filename} does not exist!")
+        sys.exit()
+    except pd.errors.EmptyDataError:
+        sys.stderr.write(f"ERROR: the file {filename} is empty!")
+        sys.exit()
+    return df
+
+frames_list = []
+
+for i in range(1,23):
+    plink_df = readCSV(f"${POP}_phase3_chr{i}.ld","\s+")
+    plink_grouped_min = plink_df.groupby(["CHR_A","SNP_A"], as_index=False)["BP_B"].min()
+    plink_grouped_max = plink_df.groupby(["CHR_A","SNP_A"], as_index=False)["BP_B"].max()
+    plink_grouped = plink_grouped_min.join(plink_grouped_max, lsuffix='_start', rsuffix='_end')
+    plink_grouped = plink_grouped.drop(["CHR_A_end","SNP_A_end"],axis=1).astype(str)
+    plink_grouped = plink_grouped.rename(columns={"CHR_A_start": "CHR_A", "SNP_A_start": "SNPS"})
+    plink_grouped["CHR"] = "chr" + plink_grouped["CHR_A"]
+    plink_grouped = plink_grouped[["CHR","BP_B_start","BP_B_end","SNPS"]]
+    plink_grouped.to_csv(f"${POP}_phase3_chr{i}.bed",index=False,header=False,sep="\t")
+    frames_list.append(plink_grouped)
+
+plink_allChr = pd.concat(frames_list)
+plink_allChr.to_csv(f"${POP}_phase3_chrALL.bed",index=False,header=False,sep="\t")
+EOF
+
+${INTERPRETER}/python make_bed.py
+
+cd ..
+
+echo "--------moving generated PLINK files------------"
+mv all_* plink_files
+mv ${POP}_* plink_files 
+
+echo "---------job finished-------------"
