@@ -91,8 +91,6 @@ for(trait in unique(loci_in_GRBs.df$MAPPED_TRAIT)){
     trait_dir <- file.path(gviz_dir,str_replace_all(trait," |/","_"))
     # Creates a dir if it does not exist
     if(!file.exists(trait_dir)){dir.create(trait_dir)}
-    # else go to next iteration
-    #else{next}
  
     # to be done on each locus
     message(trait)
