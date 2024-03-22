@@ -3,6 +3,23 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 22.03.2024.
+_Katarina_
+
+Dalibor ran twotailed targPred pipeline for which we have results. We have the methods part of the workflow done in the manuscript. 
+**Outsanding is to prepare a table for targPred web resource and to have the newest version of targPred up and running.**
+
+Methods still need parts relating to enhancerome and promoterome dataset.
+
+For the results
+  - **Katarina** needs to prepare the metabolic syndrome plot or panel.
+  - Variants participating in the LRR. **Katarina** needs to add basic numbers from our results, such as number of variants, traits, significant interactions, etc.
+  - targPred kao resurs. **Filip** should add basic information on how to use the web resource with some screenshots.  
+
+
+
+
+
 ## sastanak 22.02.2024.
 _Katarina_
 
