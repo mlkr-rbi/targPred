@@ -3,6 +3,17 @@ U ovom dokumentu navodimo što smo diskutirali na sastancima, zapisujemo ideje i
 Ideja je da Katarina, Filip i Dalibor ovo popunjavaju nakon svakog sastanka. 
 Ne treba biti pre detaljno, ali će nam pomoći da ostanemo u fokusu i da ne zaboravimo na dobre ideje :)
 
+## sastanak 27.03.2024.
+_Katarina_
+
+**Miha** radi na revisionu mipro papera. Pretumbao je dijelove papera, radio na poglavlju IV. Improving NLP with NSAI da bude sukus članka gdje obuhvaća sve glavne doprinose članka. Mora provjeriti postoje li proceedings za ljetnu školu i hoće li abstract biti negdje objavljen.
+
+**Filip** Pripremiti top i botom termove za vizualizaciju TF vezani za SNP-ove.
+
+**Katarina** Pretražiti baze i papere s relevantnim HiC podatcima. Saznati hoće li biti poster sekcija IWCBB konferencije i kada je submission deadline.
+
+**Dalibor** Prebaciti dio koda koji vadi SNP position-e kako bi se ti podaci mogli uključiti u gwas_with_traits.csv. 
+
 ## sastanak 22.03.2024.
 _Katarina_
 
