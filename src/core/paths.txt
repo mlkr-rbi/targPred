@@ -1,16 +1,16 @@
 $core
-/path/to/your/code
+src/core
 $data
-/path/to/your/data
+data
 $work
-/path/to/your/workdir
+.
 $empP_dir
-dirname_with_empP_files
+empP
 $empP
-prefix_of_empP_files
+empP_CAGEenhPermissive_hg19Ens_6.4Mb_
 $year
-is it 2021 or 2022?
+2026
 $LDblock_path
-/full/path/to/LDblock/file
+data/processed/EUR_LD_blocks_allChr.bed
 $byGRB_name
-name_of_byGRB_list.rds
+byGRB_list.rds

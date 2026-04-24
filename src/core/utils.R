@@ -8,45 +8,45 @@ assemblies <- c("canFam3", "mm10", "monDom5", "galGal4", "lepOcu1", "danRer7", "
 
 palette_primary_desktop <- c("#4E7CD9", "#153259", "#285911", "#D9A60D", "#D93425")
 
-set_paths <- function() {
-    
-    path_file <- "paths.txt"
-    path_vector <- readr::read_lines("paths.txt")
+set_paths <- function(path_file = "paths.txt") {
+    path_vector <- readr::read_lines(path_file)
     directory_type <- ""
-    core_dir <- ""
-    work_dir <- ""
-    data_dir <- ""
-    gwas_year <- ""
-
-    for (idx in 1:length(path_vector)) {
-        line_vector <- strsplit(path_vector[idx],"")
+    result <- list(
+        core_dir = "",
+        work_dir = "",
+        data_dir = "",
+        empP_dir = "",
+        empP_basename = "",
+        gwas_year = "",
+        LDblock_path = "",
+        byGRBlist_name = ""
+    )
+    for (idx in seq_along(path_vector)) {
+        line_vector <- strsplit(path_vector[idx], "")
         if (line_vector[[1]][1] == "$") {
             directory_type <- paste(line_vector[[1]][-1], collapse = "")
             next
         } else if (line_vector[[1]][1] == "#") {
-            # we can comment a line with symbol #
             next
         } else {
-            if (directory_type == "core") core_dir <- path_vector[idx]
-            if (directory_type == "work") work_dir <- path_vector[idx]
-            if (directory_type == "data") data_dir <- path_vector[idx]
-            if (directory_type == "year") gwas_year <- path_vector[idx]
+            if (directory_type == "core") result$core_dir <- path_vector[idx]
+            if (directory_type == "work") result$work_dir <- path_vector[idx]
+            if (directory_type == "data") result$data_dir <- path_vector[idx]
+            if (directory_type == "year") result$gwas_year <- path_vector[idx]
+            if (directory_type == "empP_dir") result$empP_dir <- path_vector[idx]
+            if (directory_type == "empP") result$empP_basename <- path_vector[idx]
+            if (directory_type == "LDblock_path") result$LDblock_path <- path_vector[idx]
+            if (directory_type == "byGRB_name") result$byGRBlist_name <- path_vector[idx]
         }
     }
-
-    if (core_dir == "") {
-        print("ERROR: core_dir not defined in paths.txt!")
-        quit(status=1)
-    } else if (work_dir == "") {
-        print("ERROR: work_dir not defined in paths.txt!")
-        quit(status=1)
-    } else if (data_dir == "") {
-        print("ERROR: data_dir not defined in paths.txt!")
-        quit(status=1)
-    } else if (gwas_year == "") {
-        print("ERROR: gwas_year not defined in paths.txt!")
-        quit(status=1)
+    # Set default for byGRBlist_name if empty
+    if (result$byGRBlist_name == "") result$byGRBlist_name <- "byGRB_list.rds"
+    # Error checks
+    required_vars <- c("core_dir", "work_dir", "data_dir", "empP_dir", "empP_basename", "gwas_year", "LDblock_path")
+    for (var in required_vars) {
+        if (result[[var]] == "") stop(paste("ERROR:", var, "not defined in paths.txt!"))
     }
+    return(result)
 }
 
 fancy_scientific <- function(l) {
@@ -163,6 +163,47 @@ makeBed <- function(gr, name = FALSE, filename,
     }
 }
 
+parse_paths_txt <- function(path_file = "src/core/paths.txt") {
+    path_vector <- readr::read_lines(path_file)
+    directory_type <- ""
+    result <- list(
+        core_dir = "",
+        work_dir = "",
+        data_dir = "",
+        empP_dir = "",
+        empP_basename = "",
+        gwas_year = "",
+        LDblock_path = "",
+        byGRBlist_name = ""
+    )
+    for (idx in seq_along(path_vector)) {
+        line_vector <- strsplit(path_vector[idx], "")
+        if (line_vector[[1]][1] == "$") {
+            directory_type <- paste(line_vector[[1]][-1], collapse = "")
+            next
+        } else if (line_vector[[1]][1] == "#") {
+            next
+        } else {
+            if (directory_type == "core") result$core_dir <- path_vector[idx]
+            if (directory_type == "work") result$work_dir <- path_vector[idx]
+            if (directory_type == "data") result$data_dir <- path_vector[idx]
+            if (directory_type == "year") result$gwas_year <- path_vector[idx]
+            if (directory_type == "empP_dir") result$empP_dir <- path_vector[idx]
+            if (directory_type == "empP") result$empP_basename <- path_vector[idx]
+            if (directory_type == "LDblock_path") result$LDblock_path <- path_vector[idx]
+            if (directory_type == "byGRB_name") result$byGRBlist_name <- path_vector[idx]
+        }
+    }
+    # Set default for byGRBlist_name if empty
+    if (result$byGRBlist_name == "") result$byGRBlist_name <- "byGRB_list.rds"
+    # Error checks
+    required_vars <- c("core_dir", "work_dir", "data_dir", "empP_dir", "empP_basename", "gwas_year", "LDblock_path")
+    for (var in required_vars) {
+        if (result[[var]] == "") stop(paste("ERROR:", var, "not defined in paths.txt!"))
+    }
+    return(result)
+}
+
 
 # current_GRB is a GRange of current GRB to be processed
 # current_loci needs to have a GRanges with ranges of the loci overlapping that GRB
@@ -272,22 +313,26 @@ load_per_chr_empP_file <- function(current_chr, emp_dir = "") {
     f <- file.path(emp_dir, paste0(empP_basename, as.character(current_chr), ".txt"))
     print(paste("[load_per_chr_empP_file] Loading", f, sep="\t"))
     delimiter <- get.delim(f)
-    #empP_values <- read.table(f, sep=" ", stringsAsFactors=F, skip=1)
-    #empP_values <- read.table(f, sep=delimiter, stringsAsFactors=F)
-    empP_values <- read.table(f, sep=delimiter, skip=1, stringsAsFactors=F)
+    header <- scan(f, what=character(), sep=delimiter, nlines=1)
+    empP_values <- read.table(f, sep=delimiter, header=TRUE, stringsAsFactors=FALSE)
+    # empP_values <- read.table(f, sep=" ", stringsAsFactors=F, skip=1)
+    # empP_values <- read.table(f, sep=delimiter, stringsAsFactors=F)
+    # empP_values <- read.table(f, sep=delimiter, skip=1, stringsAsFactors=F)
     #empP_values <- na.omit(empP_values)
     #colnames(empP_values) <- scan(f, what=character(), sep="\t", nlines=1)
-    colnames(empP_values) <- scan(f, what=character(), sep=delimiter, nlines=1)
-    
-    splt <- str_split(empP_values$enh, pattern="[:-]", simplify=T)
-    empP_gr <- GRanges(seqnames=empP_values$chr,
+    # print(head(empP_values))
+    # print(header)
+
+    colnames(empP_values) <- header
+    splt <- str_split(empP_values$enh_pos, pattern="[:-]", simplify=T)
+    empP_gr <- GRanges(seqnames=splt[,1],
                        ranges=IRanges(start=as.integer(splt[,2]), end=as.integer(splt[,3])),
                        gene=empP_values$gene,
-                       empP=empP_values$empP)
+                       empP=empP_values$empP_median_twoTailed)
 }
 
 
-per_GRB_empP_matrix <- function(empP_gr, current_GRB, genes_to_include) {
+per_GRB_empP_matrix <- function(empP_gr, current_GRB, genes_to_include, loci.gr) {
   
     library(reshape2)
     current_loci <- subsetByOverlaps(loci.gr, current_GRB)
@@ -533,7 +578,8 @@ plotEnhPromBeanPerTrait <- function(byGRBlist,
                                     dir,
                                     file_suffix="_gene_expression_beanplot.png",
                                     enhancer_tpm.gr,
-                                    promoter_tpm.df) {
+                                    promoter_tpm.df,
+                                    verbose=TRUE) {
       
     # description: add description and parameter definitions
     
@@ -542,22 +588,18 @@ plotEnhPromBeanPerTrait <- function(byGRBlist,
     #return(print(enh_vec))
     # Generating granges of enhancers in order to find overlaps with trait loci
     if(length(enh_vec) != 0){
- 
         enh_vec.gr <- grangesFromDataframe(as.data.frame(enh_vec), colName = enh_vec)
+        print(enh_vec.gr)
         # Vector of enhancers that overlap trait associated loci
         enh_vec.gr <- subsetByOverlaps(enh_vec.gr, loci.gr)
-        
         enh_vec <- mcols(enh_vec.gr)$enh_vec
-        print(enh_vec)
+        if(verbose) print(enh_vec)
     }
     
- 
     if(length(enh_vec)==0) {
-        print ("No enhancer peaks found.")
+        if(verbose) print ("No enhancer peaks found.")
     }
-    # Maybe remove this else and add a loop break in if
     else {
-
         # [[1]] is ordered by genomic coor, [[2]] isn't
         # Preparing df
         df1 <- data.frame(byGRBlist[[i]][[1]]$ens, 1:length(byGRBlist[[i]][[1]]$ens),
@@ -570,53 +612,43 @@ plotEnhPromBeanPerTrait <- function(byGRBlist,
             byGRBlist[[i]][[1]]$symbol[byGRBlist[[i]][[1]]$ens==e]
         })
         
-        
-        # total number of tests per locus, to be used for Bonferonni
-        # correction in beanplotIndividual
         n <- length(genes_ens)*length(enh_vec) 
         
-        # name is either gene (if there is only one transcript)
-        # or gene:TSS1, gene:TSS2, ... if there are multiple transcripts for it
         df$name_fixed <- NA
         duplicates <- names(table(df[,1])[table(df[,1])>1])
         for (p in 1:nrow(df)) {
-            #does gene have more than one TSS?
             if(df[p,1] %in% duplicates) { 
-                if (str_length(genes_hgnc[genes_ens==df[p,1]][1])>0) { #more TSSs, hgnc exists
+                if (str_length(genes_hgnc[genes_ens==df[p,1]][1])>0) {
                     df$name_fixed[p] <- paste(genes_hgnc[genes_ens==df[p,1]][1], 
                                               unlist(str_split(df[p,3], ":"))[2], sep=":")
                 }
-                else { # more TSSs, hgnc doesn't exist
+                else {
                     df$name_fixed[p] <- df[p,3]
                 }
             }
             else {
-                if (str_length(genes_hgnc[genes_ens==df[p,1]][1])>0) { # one TSS hgnc exists
+                if (str_length(genes_hgnc[genes_ens==df[p,1]][1])>0) {
                     df$name_fixed[p] <- genes_hgnc[genes_ens==df[p,1]][1]
                 }
-                else { # one tss, no hgnc symbol
+                else {
                     df$name_fixed[p] <- df[p,1]
                 }
             }
         }
         
-        # Preparing plot
-        # there are actually some filenames longer than 255 chars
         png(filename=paste0(dir,"/",file_suffix), 
             width=200*length(genes_ens)+140, 
             height=200*length(enh_vec)+100)
         
-        print(paste0("Plotting beanplot for ", i))
+        if(verbose) print(paste0("Plotting beanplot for ", i))
         
-        #how to scale matrix of beanplots
         par(mar=c(0.1,0.5,0.5,0.5))
-        # +1 column for enhancer labels, +1 row for gene label
         layout(matrix(data=seq(1, (length(genes_ens)+1)*(length(enh_vec)+1)), 
                       nrow=length(enh_vec)+1, ncol=length(genes_ens)+1, byrow=T), 
                heights=c(0.5, rep(1, length(enh_vec))), 
-               widths=c(0.7, rep(1, length(genes_ens)))) # change accordingly to layout up there
+               widths=c(0.7, rep(1, length(genes_ens))))
+
         
-        # 1) just lists gene IDs
         plot(0, xlim=c(0,1), ylim=c(0,1), type='n', 
              xaxt='n', yaxt='n', xlab='', ylab='', bty='n')
         text(0.5, 0.5, "Genes", cex=1.8, font=2)
@@ -626,21 +658,16 @@ plotEnhPromBeanPerTrait <- function(byGRBlist,
                xaxt='n', yaxt='n', xlab='', ylab='', bty='n')
           text(0.5, 0.5, df[df[,3]==g,4], cex=1.8, font=2)
         })
-        #start_time <- Sys.time()
-        # 2) plot a matrix of beanplots:
         for (enh_num in 1:length(enh_vec)) {
-
             e <- enh_vec[enh_num]
             s <- subsetByOverlaps(fantom5.enhancers.tpm.gr, GRanges(e))
             enh_expression <- apply(as.data.frame(mcols(s)), 2, sum) 
             
-            # prepare counts of grey/coloured tissues
             if(neuronal==T) {
                 vec <- c(length(enh_expression[names(enh_expression) %in% neuronal_samples$ids 
                                                & enh_expression==0]),
                          length(enh_expression[names(enh_expression) %in% neuronal_samples$ids 
                                                & enh_expression>0]))
-                
                 enh_expression <- enh_expression[names(enh_expression) %in% neuronal_samples$ids]
             }
             else {
@@ -652,7 +679,6 @@ plotEnhPromBeanPerTrait <- function(byGRBlist,
                                brewer.pal(8, "PiYG")[1], # pink
                                brewer.pal(8, "PiYG")[8]) # green
             
-            # plot enhancer label that has number of grey and pink points
             plot(0, xlim=c(0,1), ylim=c(0,1), type='n', 
                  xaxt='n', yaxt='n', xlab='', ylab='', bty='n')
             text(0.5, 0.8, paste0("Enh", enh_num), cex=3.5, font=2)
@@ -661,20 +687,14 @@ plotEnhPromBeanPerTrait <- function(byGRBlist,
             text(0.5, 0.3, paste("E+:", vec[2], sep=" "), cex=3.5, font=1.5, 
                  col=col2plot)
             
-            # now plot beanplot
             a <- sapply(df[order(df[,2]),3], function(g) {
-              
                 prom_expression <- promoter_tpm.df[rownames(promoter_tpm.df)==g,]
-                # will log-transform data and plot, and add significance based on sign method
                 expression_for_pair <- data.frame(enh_expression=enh_expression, 
                                                   prom=prom_expression)
-               
                 p_val <- byGRBlist[[i]][[3]][e,g]
                 beanplotIndividual(expression_for_pair, neuronal, col2plot, n=n, p=p_val)
             })
         }
-        #end_time <- Sys.time()
-        #print(end_time - start_time)
         dev.off()
     }
 }
@@ -868,11 +888,6 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
                                               ifelse(length(current_SNPs)<20, 5, 6)))))
     
     
-    # If current_loci has two SNPs that are identical but implicated by different 
-    # studies it will appear two times. 
-    # current_loci <-
-    #   current_loci %>%
-    #   dplyr::filter(!duplicated(SNPS))
     
     # Try to filter same LD blocks only if its too big
     if(length(current_loci) > 20){
@@ -962,6 +977,7 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
     tr_in_locus <- sapply(splt, function(x) { return(x[2]) }) # transcripts to keep for plotting
     
     
+    # print(paste0("Transcript in locus: ", tr_in_locus))
     
     gtrack <- BiomartGeneRegionTrack(start=start(current_GRB), 
                                      end=end(current_GRB),
@@ -969,9 +985,26 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
                                      biomart=mart, 
                                      name="Genes",
                                      genome = "hg19")
+
+
     
     # only genes that are in byGRB_list (FANTOM5 transcripts)
-    gtrack <- gtrack[transcript(gtrack) %in% tr_in_locus]
+    transcirpts_to_plot <- transcript(gtrack) %in% tr_in_locus
+    gtrack <- gtrack[transcirpts_to_plot]
+    
+
+    # Print gtrack 
+    # print(paste("Gtrack after filtering:", length(gtrack), "transcripts"))
+    # print(transcript(gtrack))
+
+    # Make sure that each transcript appears only once in the gene track, otherwise it will be plotted multiple times and mess up the coloring scheme
+    # gtrack <- gtrack[!duplicated(transcript(gtrack))]
+
+    
+    # After filtering for transcripts in byGRB_list, check if there are any left to plot
+    # print(paste("Gtrack after removing duplicates:", length(gtrack), "transcripts"))
+    # print(transcript(gtrack))
+
     
     if(length(gene(gtrack))==0){
         print(paste("error:",names(byGRB_list)[i]," Does not have genes in gtrack"))
@@ -985,6 +1018,24 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
         byGRB_list[[i]][[1]]$category[byGRB_list[[i]][[1]]$ens==g]
     }))
     Gviz::feature(gtrack) <- str_replace_all(Gviz::feature(gtrack), "-", "")
+
+    # Printing gviz feautres
+    # print(paste("length symbol", length(symbol(gtrack))))
+
+    # print(gtrack)
+    # print(feature(gtrack))
+    # print(symbol(gtrack))
+    # print(transcript(gtrack))
+    # print(byGRB_list[[i]][[1]]$category)
+    # print(byGRB_list[[i]][[1]]$ens)
+
+
+
+    # print(feature(gtrack))
+    # print(symbol(gtrack))
+    # print(transcript(gtrack))
+    # print(gene(gtrack) )
+    # print(values(gtrack))
     
     # Number of genes that are actually ploted (corresponds to number of symbols)
     # gene_number <- length(unique(symbol(gtrack))) 
@@ -1011,6 +1062,7 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
     displayPars(gtrack) <- list(showId=T, col=NULL,
                                 GWASout=col_palette[3], GWAStrgt=col_palette[5], GRBtrgt=col_palette[1], 
                                 GRBbyst=col_palette[2], GWASbyst=col_palette[4]) # turn on gene symbols, no dashes allowed
+
     
     # CNE density track (CNEdtrack)
     #CNEdensfile <- "~/Documents/grbs/HCNE_density_hg19_mm10_96pc_50col.wig.gz"
@@ -1068,13 +1120,12 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
         hei=2000
     }
     
+
     
-    
+
     
     png(filename=paste0(dir, str_replace_all(names(byGRB_list)[i], ":", "_"), "_Gviz.png"), 
         width=wid, height=hei)
-    #pdf(file=paste0(dir, str_replace_all(names(byGRB_list)[i], ":", "_"), "_Gviz.pdf"),
-    #    width=10, height=10)
     plotTracks(list(itrack, 
                     Gtrack,
                     grbtrack,
@@ -1096,7 +1147,40 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
                        gTrSize),
                background.title="azure3", fontcolor.title="black")
    
-    for (i in dev.list()[1]:dev.list()[length(dev.list())]) {
-        dev.off()
-    }
+    # for (i in dev.list()[1]:dev.list()[length(dev.list())]) {
+    #     dev.off()
+    # }
+    while (length(dev.list()) > 0) {
+        print(paste("Closing device", length(dev.list())))
+    dev.off()
+}
+
+    # pdf(paste0(dir, str_replace_all(names(byGRB_list)[i], ":", "_"), "_Gviz.pdf"), 
+    #     width=10, height=10)
+    # #pdf(file=paste0(dir, str_replace_all(names(byGRB_list)[i], ":", "_"), "_Gviz.pdf"),
+    # #    width=10, height=10)
+    # plotTracks(list(itrack, 
+    #                 Gtrack,
+    #                 grbtrack,
+    #                 CNEdtrack,
+    #                 dirtrack,
+    #                 ltrack,
+    #                 strack,
+    #                 etrack,
+    #                 gtrack),
+    #            from=xmin, to=xmax, 
+    #            sizes=c(1, #itrack 
+    #                    1, #Gtrack
+    #                    1, #grbtrack
+    #                    1.5, #CNE track
+    #                    dirTrSize,
+    #                    lociTrSize,
+    #                    snpTrSize,
+    #                    enhTrSize,
+    #                    gTrSize),
+    #            background.title="azure3", fontcolor.title="black")
+   
+    # for (i in dev.list()[1]:dev.list()[length(dev.list())]) {
+    #     dev.off()
+    # }
 }

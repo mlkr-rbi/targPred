@@ -8,8 +8,8 @@ library(GenomicRanges)
 library(dplyr)
 library(rtracklayer)
 
-path_file <- "paths.txt"
-path_vector <- readr::read_lines("paths.txt")
+path_file <- "src/core/paths.txt"
+path_vector <- readr::read_lines(path_file)
 directory_type <- ""
 data_dir <- ""
 
@@ -88,5 +88,24 @@ cne_density_grb <-
   ungroup() %>%
   makeGRangesFromDataFrame(keep.extra.columns = TRUE)
 
+# Add number of target genes to run_targPred log file
+num_target_genes <- sum(cne_density_grb$geneName != "")
+log_file <- file.path(data_dir, "processed/logs", "targPred_run_log.txt")
+write(paste("Number of target genes in CNE density GRBs:", num_target_genes), file = log_file, append = TRUE)
+# Add number of GRBs 
+num_grbs <- length(cne_density_grb)
+write(paste("Number of GRBs with target genes:", num_grbs), file = log_file, append = TRUE)
+# Add number of GRBs with multiple target genes
+num_grbs_multiple_targets <- sum(str_count(cne_density_grb$geneName, ",") >= 1)
+write(paste("Number of GRBs with multiple target genes:", num_grbs_multiple_targets), file = log_file, append = TRUE)
 
+
+
+# Save as granges object
 saveRDS(cne_density_grb, file.path(data_dir, "processed", "GRBs_with_targets.gr.rds"))
+# Save as table for use in scripts that need a table
+cne_density_grb_df <- as.data.frame(cne_density_grb) %>%
+  select(-strand)
+
+write.table(cne_density_grb_df, file.path(data_dir, "processed", "GRBs_with_targets.tsv"), sep = "\t", row.names = FALSE, quote = FALSE)  
+

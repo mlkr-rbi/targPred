@@ -7,87 +7,76 @@ library(stringr)
 library(dplyr)
 library(GenomicRanges)
 library(RColorBrewer)
-library(beanplot)
+#library(beanplot)
 library(biomaRt)
+library(parallel)
 
-path_file <- "paths.txt"
-path_vector <- readr::read_lines("paths.txt")
+# Manually set the path to utils.R
+source(file.path("src/core", "utils.R"))
+
 directory_type <- ""
-core_dir <- ""
-work_dir <- ""
-data_dir <- ""
-gwas_year <- ""
-byGRBlist_name <- ""
+paths <- set_paths("src/core/paths.txt")
+core_dir <- paths$core_dir
+work_dir <- paths$work_dir
+data_dir <- paths$data_dir
+gwas_year <- paths$gwas_year
+byGRBlist_name <- paths$byGRBlist_name
 
-for (idx in 1:length(path_vector)) {
-    line_vector <- strsplit(path_vector[idx],"")
-    if (line_vector[[1]][1] == "$") {
-        directory_type <- paste(line_vector[[1]][-1], collapse = "")
-        next
-    } else if (line_vector[[1]][1] == "#") {
-        # we can comment a line with symbol #
-        next
-    } else {
-        if (directory_type == "core") core_dir <- path_vector[idx]
-        if (directory_type == "work") work_dir <- path_vector[idx]
-        if (directory_type == "data") data_dir <- path_vector[idx]
-        if (directory_type == "year") gwas_year <- path_vector[idx]
-        if (directory_type == "byGRB_name") byGRBlist_name <- path_vector[idx]
-    }
-}
 
-if (core_dir == "") {
-    print("ERROR: core_dir not defined in paths.txt!")
-    quit(status=1)
-} else if (work_dir == "") {
-    print("ERROR: work_dir not defined in paths.txt!")
-    quit(status=1)
-} else if (data_dir == "") {
-    print("ERROR: data_dir not defined in paths.txt!")
-    quit(status=1)
-} else if (gwas_year == "") {
-    print("ERROR: gwas_year not defined in paths.txt!")
-    quit(status=1)
-}
-if (byGRBlist_name == "") {
-    print("byGRB_list name is default byGRB_list.rds")
-    byGRBlist_name <- "byGRB_list.rds"
-}
 
-source(file.path(core_dir, "utils.R"))
+# use set_paths using paths.txt
+# set_paths(path_file)
 
 # Object that contains all GRBs, genes, enhancers and empP values for enh-transcript
-byGRB_list <- readRDS(file.path(data_dir,"outputs",byGRBlist_name))
+byGRB_list <- readRDS(file.path(data_dir,"processed",byGRBlist_name))
 loci_in_GRBs.df <- readRDS(file.path(data_dir,"processed","loci_in_GRBs.df.rds"))
-loci_in_GRBs.gr <- readRDS(file.path(data_dir,"processed","loci_in_GRBs.gr.rds"))
+# loci_in_GRBs.gr <- readRDS(file.path(data_dir,"processed","loci_in_GRBs.gr.rds"))
 snps_in_GRBs.gr <- readRDS(file.path(data_dir,"processed","snps_in_GRBs.gr.rds"))
 # Target genes for CNE density GRBs 
 target_genes <- 
   read.csv(file.path(data_dir,"inputs","hg19.canFam3.tsv"), sep = "\t", header = TRUE)  
 # Building target gene genomic ranges
 # enhancers and promoters are pooled data
-TSSs.perTranscript.gr <- readRDS(file.path(data_dir, "processed","TSSs.perTranscript.gr.rds"))
-fantom5.enhancers.tpm.gr <- readRDS(file.path(data_dir, "processed","fantom5.enhancers.tpm.pooled.gr.rds"))
-promoter_cage_tpm_df <- readRDS(file.path(data_dir, "processed","promoter_cage_tpm_df_fixed_pooled.rds"))
+TSSs.perTranscript.gr <- readRDS(file.path(data_dir, "inputs","TSSs.perTranscript.gr.rds"))
+fantom5.enhancers.tpm.gr <- readRDS(file.path(data_dir, "inputs","fantom5.enhancers.tpm.pooled.gr.rds"))
+promoter_cage_tpm_df <- readRDS(file.path(data_dir, "inputs","promoter_cage_tpm_df_fixed_pooled.rds"))
 # GRBS
 grbs <- readRDS(file.path(data_dir, "processed", "GRBs_with_targets.gr.rds"))
 # list with gene ids (Anja)
-genes.hg19.ensembl <- readRDS(file.path(data_dir, "processed","genes.hg19.ensembl.rds"))
-gwas_associations <- readRDS(file.path(data_dir, "inputs", paste0("gwas_catalog_",gwas_year),"gwas_associations.rds"))
+genes.hg19.ensembl <- readRDS(file.path(data_dir, "inputs","genes.hg19.ensembl.rds"))
+
+# gwas_rds_path <- file.path(data_dir, "inputs", paste0("gwas_catalog_",gwas_year), "gwas_associations.rds")
+# message("[diagnostic] R working dir: ", getwd())
+# message("[diagnostic] gwas_rds_path: ", gwas_rds_path)
+# message("[diagnostic] file.exists: ", file.exists(gwas_rds_path))
+# message("[diagnostic] list parent dir: ")
+# print(list.files(dirname(gwas_rds_path), all.files = TRUE))
+gwas_associations <- read.csv(file.path(data_dir, "outputs", "gwas_associations.csv"), header = TRUE, stringsAsFactors = FALSE)
 
 col_vec <- c("darkgoldenrod1", "darkorange1", "red")
 
-gviz_dir <- file.path( "plots/gviz_plots")
+gviz_dir <- file.path( "data/plots/gviz_plots")
+
+# Create loci_in_GRB.gr from df
+loci_in_GRBs.gr <- grangesFromDataframe(loci_in_GRBs.df, colName = LDblock, keep_metadata = TRUE)
 
 # Adding a column to grbs that correspond to targets
 # actual plotting, saved in gviz_dir
 loci_in_GRBs.gr$name <- loci_in_GRBs.gr$SNPS # need to have a $name column for gviz plotting
 
+
+
 # preparing mart to extract gene objects from
-mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL", host="https://feb2014.archive.ensembl.org")
+# mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL", host="https://feb2014.archive.ensembl.org")
+mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL")
+
+# Looping through traits and plotting Gviz for each trait separately, including only loci with the trait and SNPs with the trait
+traits <- unique(loci_in_GRBs.df$MAPPED_TRAIT) %>% sort()
 
 
-for(trait in unique(loci_in_GRBs.df$MAPPED_TRAIT)){
+num_cores <- as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))
+
+mclapply(traits, function(trait) {
     trait_dir <- file.path(gviz_dir,str_replace_all(trait," |/","_"))
     # Creates a dir if it does not exist
     if(!file.exists(trait_dir)){dir.create(trait_dir)}
@@ -119,4 +108,12 @@ for(trait in unique(loci_in_GRBs.df$MAPPED_TRAIT)){
                  error=function(e){cat("ERROR :",conditionMessage(e), "\n", trait, i)})
     }
 }
+)
 
+
+# # Delete later
+# mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL")
+# # Testing for the trait 1-palmitoyl-2-linoleoyl-GPI_(16:0_18:2)_measurement
+# # GRB chr1_62951322_63191653
+
+# gtrack <- BiomartGeneRegionTrack(start = 62951322, end = 63191653, chromosome = "chr1", biomart = mart, name = "Genes")

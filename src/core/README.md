@@ -32,36 +32,83 @@ Meaning of the keywords:
 - $empP\_dir: directory name with your empP files
 - $empP: file prefix of empP files
 - $year: year of the GWAS catalog edition
-- $LDblock\_path: full path leading to the bed file with LD blocks, resulting form the PLINK analysis
+- $LDblock\_path: full path leading to the bed file with LD blocks, resulting form the PLINK analysis - the name of the file is EUR_LD_blocks_allChr.bed
 - $byGRB\_name: filename to save beGRBi\_list 
 
 The SGE scripts can be adapted for usage on other job scheduling systems such as Slurm or PBS. 
 
-## 3) Downloading 1000Genomes data, and calculating LD blocks
+
+## Downloading GWAS data and calculating LD blocks using 1000Genomes data
+
+
+
+To process the GWAS catalog, use the `process_gwas_catalog.R` script. This script downloads the latest GWAS catalog (e.g., the `/2026/02/17/` release), parses the relevant SNP and trait information, and formats the data for downstream analysis. 
 
 
 The script `run_PLINK.sge` follows the workflow, as outlined in `https://cran.r-project.org/web/packages/snpsettest/vignettes/reference_1000Genomes.html`.l It downloads the hg19 data from `https://www.cog-genomics.org/plink/2.0/resources#1kg_phase3`, selects the desired population, transforms the data into PLINK1 format and calculates the linkage disequilibrium blocks. 
 
 The user should add the absolute or relative paths to directories containing PLINK1, PLINK2 and Python executables, as well as the path to the text file containing the list of SNPs for the LD block calculation. The user can change the PLINK settings for LD block calculations directly in the script.
 
+
 The script can afterwards be submitted to the queueing system through the following command:
 
 ```
-qsub run_PLINK.sge
+squeue run_PLINK.sh
 ```
 
-The bed file with the linkage disequilibrium blocks can be found in the newly created directory named ld\_blocks. The script produces a file with LD blocks for each chromosome separately, as well as their concatenated version named "${POP}_phase3_chrALL.bed", where ${POP} denotes the desired population.
+The bed file with the linkage disequilibrium blocks can be found in the newly created directory named ld\_blocks. The script produces a file with LD blocks for each chromosome separately, as well as their concatenated version named "${POP}.bed", where ${POP} denotes the desired population. Bed file with all combined chromosomes is stored in data/processed directory: EUR_LD_blocks_allChr.bed
 
 
-## 4) Overlapping GWAS variants with GRBs
+## Overlapping GWAS variants with GRBs
 
-After LD block calculation, the user should edit the script run\_targPred.sge by introducing the path to the directory containing the Rscript executable, as well as the path to the targPred code associated with the COREDIR variable. With these options correctly set up, the user can submit the main targPred script by executing the following command:
+After LD block calculation, the user should edit the script run\_targPred.sh by introducing the path to the directory containing the Rscript executable, as well as the path to the targPred code associated with the COREDIR variable. With these options correctly set up, the user can submit the main targPred script by executing the following command:
 
 ```
 qsub run_targPred.sge
 ```
 
-In the first step, the script generate grb granges with target gene information in metadata by executing the script `adding_target_genes_to_grbs.R`. The main R script `gwas_snps_in_grb.R` is executed next.. This script processes gwas genes-> Reported genes and mapped genes into one (GWAS\_GENES). Also, for a reported SNP there are multiple traits reported so this script separates each trait into a separate row. Finally, the script outputs byGRB\_list structure containing information about all genes contained in each GRB and their interactions with enhancers. This structure is required for subsequent plot geeration.
+In the first step, the script generate grb granges with target gene information in metadata by executing the script `adding_target_genes_to_grbs.R`. 
+The  R script `gwas_snps_in_grb.R` is executed next.. This script processes adds LD blocks to gwas assoication, merges  Reported genes and mapped genes into one (GWAS\_GENES). Also, for a reported SNP there are multiple traits reported so this script separates each trait into a separate row. 
+
+**process_gwas_catalog.R**
+
+Script inputs:
+  - `data/inputs/GWAS_2026/gwas-catalog-download-associations-alt-full.tsv`
+  
+Script outputs:
+  - `data/processed/gwas_associations_2026.csv`
+  - `data/processed/gwas_snps_2026.txt`
+
+**gwas_snps_in_grb.R**
+Log file: `processed/logs/gwas_snps_in_grb.txt`
+
+Script inputs:
+  - `data/processed/GRBs_with_targets.gr.rds`
+  - `data/inputs/GWAS_2026/gwas-efo-trait-mappings.tsv`
+  - `data/inputs/GWAS_2026/gwas-catalog-download-associations-alt-full.tsv`
+  
+
+Script outputs:
+  - `data/outputs/gwas_associations.csv`
+  - `data/outputs/loci_in_GRBs.bed`
+  - `data/processed/loci_in_GRBs.df.csv`
+  - `data_dir/processed/snps_in_GRBs.gr.rds`
+
+**prepare_for_web**
+
+Script inputs:
+   - `data/outputs/gwas_associations.csv`
+   - `data/processed/loci_in_GRBs.df.csv`
+   - `data/inputs/mart_result.df.csv` (optional, if exists)
+
+Script outputs:
+   - `data/outputs/GWAS_SNPs_mart_result.csv` (created if biomaRt query is run or if `mart_result.df.csv` is missing)
+   - `data/outputs/web_table.df.csv`
+   - `data/outputs/targpred<year>.db` (SQLite database with tables: `grb_table`, `loci_table`)
+
+
+
+Finally, the script outputs byGRB\_list structure containing information about all genes contained in each GRB and their interactions with enhancers. This structure is required for subsequent plot geeration.
 
 The last step in targPred workflow is plot production. Two types of plots are generated: Gviz plots depicting genomic regions of interest and beanplots showng transcript expression depending on corresponding enhancer activity and empirical p value association.
 

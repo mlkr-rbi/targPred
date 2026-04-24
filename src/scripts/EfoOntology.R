@@ -37,8 +37,8 @@ for(i in 1:length(names(efo_terms@x))){
   efo_mappings <- rbind(efo_mappings, working_df)
 }
 
-#saveRDS(efo_terms, "codingVariants/RDS/efo_terms.rds")
-#saveRDS(efo_mappings, "codingVariants/RDS/efo_mappings.rds")
+# Remove the initial NA row
+efo_mappings <- efo_mappings %>% filter(!is.na(id1))
 
-
-
+saveRDS(efo_terms, "data/processed/efo_terms.rds")
+write.csv(efo_mappings, "data/processed/efo_mappings.csv", row.names = FALSE)
