@@ -22,14 +22,21 @@ data_dir <- paths$data_dir
 gwas_year <- paths$gwas_year
 byGRBlist_name <- paths$byGRBlist_name
 
-
+# Paths derived from already loaded objects
+cne_density_file <- file.path(
+  data_dir, "inputs", "HCNE_density_hg19_canFam3_98pc_50col.wig.gz"
+)
+directionality_file <- file.path(
+  data_dir, "inputs", "tad_tracks", "directionality_homer_neural.bigWig"
+)
+gviz_output_suffix <- "_Gviz.png"
 
 # use set_paths using paths.txt
 # set_paths(path_file)
 
 # Object that contains all GRBs, genes, enhancers and empP values for enh-transcript
 byGRB_list <- readRDS(file.path(data_dir,"processed",byGRBlist_name))
-loci_in_GRBs.df <- readRDS(file.path(data_dir,"processed","loci_in_GRBs.df.rds"))
+loci_in_GRBs.df <- read.csv(file.path(data_dir,"processed","loci_in_GRBs.df.csv"), header = TRUE, stringsAsFactors = FALSE)
 # loci_in_GRBs.gr <- readRDS(file.path(data_dir,"processed","loci_in_GRBs.gr.rds"))
 snps_in_GRBs.gr <- readRDS(file.path(data_dir,"processed","snps_in_GRBs.gr.rds"))
 # Target genes for CNE density GRBs 
@@ -57,6 +64,14 @@ col_vec <- c("darkgoldenrod1", "darkorange1", "red")
 
 gviz_dir <- file.path( "data/plots/gviz_plots")
 
+# Check if gviz_dir exists, if not create it
+if(!file.exists(gviz_dir)){
+  dir.create(gviz_dir)
+}
+
+# Filter NA for MAPPED_TRAIT in loci_in_GRBs.df
+loci_in_GRBs.df <- loci_in_GRBs.df[!is.na(loci_in_GRBs.df$MAPPED_TRAIT),]
+
 # Create loci_in_GRB.gr from df
 loci_in_GRBs.gr <- grangesFromDataframe(loci_in_GRBs.df, colName = LDblock, keep_metadata = TRUE)
 
@@ -68,11 +83,29 @@ loci_in_GRBs.gr$name <- loci_in_GRBs.gr$SNPS # need to have a $name column for g
 
 # preparing mart to extract gene objects from
 # mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL", host="https://feb2014.archive.ensembl.org")
-mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL")
+# THIS IS HG38 so do NOT use it
+# mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL")
+mart <- NULL
+for (attempt in 1:5) {
+  tryCatch({
+    mart <- useEnsembl(
+      biomart = "genes",
+      dataset = "hsapiens_gene_ensembl",
+      host = "https://grch37.ensembl.org"
+    )
+    break
+  }, error = function(e) {
+    message("Attempt ", attempt, " failed: ", conditionMessage(e))
+  })
+}
+
+if (is.null(mart)) {
+  stop("Failed to connect to Ensembl after 5 attempts")
+}
+
 
 # Looping through traits and plotting Gviz for each trait separately, including only loci with the trait and SNPs with the trait
 traits <- unique(loci_in_GRBs.df$MAPPED_TRAIT) %>% sort()
-
 
 num_cores <- as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))
 
@@ -104,16 +137,11 @@ mclapply(traits, function(trait) {
                            snps.gr=snps_in_GRBs.gr[snps_in_GRBs.gr$SNPS %in% loci_in_GRB_trait$SNPS,],
                            grbs=grbs, 
                            mart=mart,
-                           trait = trait),
+                           trait = trait,
+                           cne_density_file = cne_density_file,
+                           directionality_file = directionality_file,
+                           output_suffix = gviz_output_suffix),
                  error=function(e){cat("ERROR :",conditionMessage(e), "\n", trait, i)})
     }
 }
 )
-
-
-# # Delete later
-# mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL")
-# # Testing for the trait 1-palmitoyl-2-linoleoyl-GPI_(16:0_18:2)_measurement
-# # GRB chr1_62951322_63191653
-
-# gtrack <- BiomartGeneRegionTrack(start = 62951322, end = 63191653, chromosome = "chr1", biomart = mart, name = "Genes")

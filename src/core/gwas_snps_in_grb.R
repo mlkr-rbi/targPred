@@ -20,9 +20,6 @@ gwas_year <- paths$gwas_year
 LDblock_path <- paths$LDblock_path
 byGRBlist_name <- paths$byGRBlist_name
 
-
-
-
 setwd(work_dir)
 
 ### Script inputs ###
@@ -117,7 +114,7 @@ gwas <- gwas %>%
 ### Separating Traits ####
 # Each investigated SNP has an associated mapped trait, or multiple. Since our goal is to explore the relationship between a SNP and a single trait row separation based on trait is required. Trait names are stored in MAPPED_TRAIT and the URI that contain unique disease/trait ontology id in MAPPED_TRAIT_URI. Traits are comma separated but some trait names contain commas. To avoid error prone case by case exceptions, trait separation will be based on the URI and trait names will be cross mapped from the ontology.
 efo_mappings_sub <- efo_mappings %>%
-    select(EFO.term, EFO.URI) %>%
+    dplyr::select(EFO.term, EFO.URI) %>%
     unique()
 
 # Separate GWAS rows by trait using EFO mappings
@@ -125,9 +122,10 @@ gwas <- gwas %>%
     tidyr::separate_rows(MAPPED_TRAIT_URI, sep=",") %>%
     mutate(MAPPED_TRAIT_URI = str_trim(MAPPED_TRAIT_URI)) %>%
     left_join(efo_mappings_sub, by = c("MAPPED_TRAIT_URI" = "EFO.URI")) %>%
-    select(-MAPPED_TRAIT) %>%
-    select(everything(), MAPPED_TRAIT = EFO.term)
-     # Remove rows with NA in MAPPED_TRAIT_URI or MAPPED_TRAIT
+    dplyr::select(-MAPPED_TRAIT) %>%
+    dplyr::select(everything(), MAPPED_TRAIT = EFO.term) %>%
+    # Add MAPPED_TRAIT_ID column by extracting the last part of the MAPPED_TRAIT_URI after the last "/"
+    mutate(MAPPED_TRAIT_ID = str_extract(MAPPED_TRAIT_URI, "[^/]+$"))
 
 
 # Cat the dimensions of gwas after joining with LD blocks and separating traits
@@ -263,7 +261,7 @@ cat("Number of SNPs in loci_in_GRBs.df$SNPS that are not present in mart_result:
 # Extracting SNPs that are in GRBs and creating a GRanges object for them
 snps_in_GRBs.gr <- filter(mart_result, refsnp_id %in%      loci_in_GRBs.df$SNPS) %>%
 # Rename columns
-    select(SNPS = refsnp_id, CHR = chr_name, POS = chrom_start) %>%
+    dplyr::select(SNPS = refsnp_id, CHR = chr_name, POS = chrom_start) %>%
     # Creating a GRanges object
     makeGRangesFromDataFrame(seqnames.field = "CHR", start.field = "POS", end.field = "POS", keep.extra.columns = TRUE)
 
@@ -277,7 +275,7 @@ saveRDS(snps_in_GRBs.gr, file = snps_in_GRBs_gr_fn)
 
 ### Prepare web_table ###
 web_table <- gwas %>%
-    left_join(select(loci_in_GRBs.df, SNPS, grb.coords, GRB_GENES), by = c("SNPS")) %>%
+    left_join(dplyr::select(loci_in_GRBs.df, SNPS, grb.coords, GRB_GENES), by = c("SNPS")) %>%
     distinct(.keep_all = FALSE) 
 
 web_table <- web_table %>%
@@ -300,11 +298,11 @@ web_table <- web_table %>%
 
 # Add SNP positions to the web table by joining with mart_result
 web_table <- web_table %>%
-    left_join( select(mart_result, refsnp_id, chrom_start), by = c("SNP" = "refsnp_id")) 
+    left_join( dplyr::select(mart_result, refsnp_id, chrom_start), by = c("SNP" = "refsnp_id")) 
 
 web_table <- web_table %>%
 # Rename chrom_start to SNP_position and reorder columns using select
-    select("Chromosome","SNP","Locus_position", SNP_position = "chrom_start","P_value","Mapped_trait","Study_accession","GRB_position","GRB_targets","GWAS_genes","inGRB")
+    dplyr::select("Chromosome","SNP","Locus_position", SNP_position = "chrom_start","P_value","Mapped_trait","Study_accession","GRB_position","GRB_targets","GWAS_genes","inGRB")
 
 
 write.csv(web_table, file = web_table_fn, row.names = FALSE)

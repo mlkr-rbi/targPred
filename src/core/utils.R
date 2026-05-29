@@ -778,23 +778,13 @@ plot_box_legend <- function(string, col_vec, filename, title, horiz) {
 # labels of GRB and locus track can be turned off (others are irresponsice to the flag)
 
 locusGviz <- function(i, dir, labels=T, byGRB_list, 
-                      loci.gr, snps.gr, grbs, mart, trait) {
+                      loci.gr, snps.gr, grbs, mart, trait,
+                      data_dir = NULL,
+                      cne_density_file = NULL,
+                      directionality_file = NULL,
+                      output_suffix = "_Gviz.png") {
 
-    path_file <- "paths.txt"
-    path_vector <- readr::read_lines("paths.txt")
-    directory_type <- ""
-    data_dir <- ""
-  
-    for (idx in 1:length(path_vector)) {
-        line_vector <- strsplit(path_vector[idx],"")
-        if (line_vector[[1]][1] == "$") {
-            directory_type <- paste(line_vector[[1]][-1], collapse = "")
-            next
-        } else {
-            if (directory_type == "data") data_dir <- path_vector[idx]
-        }
-    }
- 
+
     # setting a nice pallete of Grey, Green and Purple that match
     Grey   <- "#7D949B"
     Green  <- "#9CA94E"
@@ -977,8 +967,7 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
     tr_in_locus <- sapply(splt, function(x) { return(x[2]) }) # transcripts to keep for plotting
     
     
-    # print(paste0("Transcript in locus: ", tr_in_locus))
-    
+  
     gtrack <- BiomartGeneRegionTrack(start=start(current_GRB), 
                                      end=end(current_GRB),
                                      chromosome=current_chr, 
@@ -986,24 +975,13 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
                                      name="Genes",
                                      genome = "hg19")
 
-
+    
     
     # only genes that are in byGRB_list (FANTOM5 transcripts)
     transcirpts_to_plot <- transcript(gtrack) %in% tr_in_locus
     gtrack <- gtrack[transcirpts_to_plot]
     
 
-    # Print gtrack 
-    # print(paste("Gtrack after filtering:", length(gtrack), "transcripts"))
-    # print(transcript(gtrack))
-
-    # Make sure that each transcript appears only once in the gene track, otherwise it will be plotted multiple times and mess up the coloring scheme
-    # gtrack <- gtrack[!duplicated(transcript(gtrack))]
-
-    
-    # After filtering for transcripts in byGRB_list, check if there are any left to plot
-    # print(paste("Gtrack after removing duplicates:", length(gtrack), "transcripts"))
-    # print(transcript(gtrack))
 
     
     if(length(gene(gtrack))==0){
@@ -1019,24 +997,6 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
     }))
     Gviz::feature(gtrack) <- str_replace_all(Gviz::feature(gtrack), "-", "")
 
-    # Printing gviz feautres
-    # print(paste("length symbol", length(symbol(gtrack))))
-
-    # print(gtrack)
-    # print(feature(gtrack))
-    # print(symbol(gtrack))
-    # print(transcript(gtrack))
-    # print(byGRB_list[[i]][[1]]$category)
-    # print(byGRB_list[[i]][[1]]$ens)
-
-
-
-    # print(feature(gtrack))
-    # print(symbol(gtrack))
-    # print(transcript(gtrack))
-    # print(gene(gtrack) )
-    # print(values(gtrack))
-    
     # Number of genes that are actually ploted (corresponds to number of symbols)
     # gene_number <- length(unique(symbol(gtrack))) 
     gene_number <- length(symbol(gtrack)) 
@@ -1064,26 +1024,24 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
                                 GRBbyst=col_palette[2], GWASbyst=col_palette[4]) # turn on gene symbols, no dashes allowed
 
     
-    # CNE density track (CNEdtrack)
-    #CNEdensfile <- "~/Documents/grbs/HCNE_density_hg19_mm10_96pc_50col.wig.gz"
-    CNEdensfile <- paste(data_dir,"inputs","HCNE_density_hg19_canFam3_98pc_50col.wig.gz",sep="/")
-    CNEdtrack <- DataTrack(range=CNEdensfile, name="hg19_canFam3\n96/50",
+ # CNE density track (CNEdtrack)
+    CNEdtrack <- DataTrack(range=cne_density_file, name="hg19_canFam3\n96/50",
                            genome="hg19", chromosome=current_chr, 
                            type="polygon", col.mountain="azure3",
                            fill.mountain=c("azure3", "azure3"))
     
     # plot directionality index
-    dirfile <- paste(data_dir,"processed/tad_tracks/directionality_homer_neural.bigWig",sep="/")
-    dirtrack <- DataTrack(range=dirfile, name="Homer_DI_neural",
+    dirtrack <- DataTrack(range=directionality_file, name="Homer_DI_neural",
                           genome="hg19", chromosome=current_chr,
                           type="mountain", baseline=0, lty.mountain=0,
                           fill.mountain=adjustcolor(c("darkgreen", "darkred"), alpha.f = 0.7),
-                          col.mountain="black") # baseline line colour
+                          col.mountain="black")
+
     
     dirTrSize <- 1.5 # size of the dir. index track
     # high values look noisy if not smoothed, low ones throw an error if smoothed
     # so only smooth of directionality index is above this arbitrary threshold
-    DI_neural <- rtracklayer::import.bw(dirfile)
+    DI_neural <- rtracklayer::import.bw(directionality_file)
     x <- subsetByOverlaps(DI_neural, current_GRB)
     
     #adjusting span for loess to plot
@@ -1121,7 +1079,6 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
     }
     
 
-    
 
     
     png(filename=paste0(dir, str_replace_all(names(byGRB_list)[i], ":", "_"), "_Gviz.png"), 
@@ -1153,7 +1110,7 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
     while (length(dev.list()) > 0) {
         print(paste("Closing device", length(dev.list())))
     dev.off()
-}
+    }
 
     # pdf(paste0(dir, str_replace_all(names(byGRB_list)[i], ":", "_"), "_Gviz.pdf"), 
     #     width=10, height=10)
