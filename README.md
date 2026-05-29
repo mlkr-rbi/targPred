@@ -1,8 +1,18 @@
 # targPred
 
-`targPred` is an analysis project for linking GWAS loci to candidate target genes through genomic regulatory blocks (GRBs), linkage disequilibrium blocks, and enhancer-promoter evidence. The project asks whether disease- or trait-associated variants that fall within GRBs can improve target gene prioritization beyond standard GWAS gene annotations.
+Genome-wide association studies (GWAS) are a key tool for discovering associations between single nucleotide polymorphisms (SNPs) and phenotypic traits, but identifying the gene affected by a disease-associated SNP remains difficult, especially when the causal gene is distal in genomic distance. `targPred` is an analysis project for linking GWAS loci to candidate target genes through genomic regulatory blocks (GRBs), linkage disequilibrium blocks, and enhancer-promoter evidence.
+
+The project uses the GRB model to infer connections between SNPs or loci and target genes located in the same regulatory block. This approach is motivated by the fact that many non-coding disease-associated variants may act through long-range regulation rather than the nearest gene. The analysis highlights disease traits with a propensity for long-range regulation, including cancer and psychiatric disease, and includes a childhood-obesity-associated locus connected to the distal `BDNF` gene.
 
 The workflow is organized into three main parts: `src/empP` calculates prerequisite enhancer-promoter empirical p-values, `src/core` runs the main targPred pipeline, and `src/analysis` contains downstream analyses based on intermediate or final core outputs.
+
+Main results are available through the targPred website:
+
+```text
+http://targpred.irb.hr/
+```
+
+Paper: TODO add manuscript/preprint/publication link.
 
 ## Inputs and Outputs
 
@@ -19,8 +29,6 @@ At a high level, required inputs are stored under `data/inputs/`, intermediate f
 - `src/empP/`: prerequisite code for calculating empirical p-values for enhancer-promoter pairs.
 - `src/core/`: main targPred pipeline.
 - `src/analysis/`: downstream analyses based on intermediate or final outputs from the core pipeline.
-- `src/scripts/`: helper scripts. Currently, `src/scripts/make_bed.R` is called by the core PLINK workflow.
-- `src/trash/`: archived or exploratory scripts that are not part of the current documented workflow.
 - `data/inputs/`: required input data.
 - `data/processed/`: intermediate files produced during the workflow.
 - `data/outputs/`: main output tables and database files.
@@ -62,6 +70,6 @@ See the subfolder documentation for specific commands, expected inputs, and expe
 
 ## Notes
 
-Some scripts are exploratory, archived, or retained for provenance. The documented workflow should focus on `src/empP`, `src/core`, and the active analysis folders under `src/analysis`.
+The documented workflow focuses on `src/empP`, `src/core`, and the active analysis folders under `src/analysis`.
 
 Large data files, generated outputs, local logs, keys, and local environment folders should not be committed to GitHub unless explicitly intended.
