@@ -6,11 +6,11 @@
 
 export CH_IMAGE_STORAGE=$HOME/charliecloud
 
-# for chr in chr{1..22} chrX; do
+for chr in chr{1..22} chrX; do
 
-#     ch-run -b /home/kprskalo/targPred:/workspace --cd /workspace targpred_v6 -- \
-#         env HOME=/workspace Rscript src/empP/two_tailed_empP_parallel.R $chr
-# done
+    ch-run -b /home/kprskalo/targPred:/workspace --cd /workspace targpred_v6 -- \
+        env HOME=/workspace Rscript src/empP/two_tailed_empP_parallel.R $chr
+done
 
 
 # Directory where chromosome outputs are stored

@@ -56,13 +56,11 @@ if(!dir.exists(fn_out)){
   dir.create(fn_out, recursive = TRUE)
 }
 
-#TEST
-# fn <- paste0("empP_CAGEenhPermissive_hg19Ens_6.4Mb_",chr,".txt")
-# fn <- paste0("02-test_empP_CAGEenhPermissive_hg19Ens_6.4Mb_",chr,".txt")
-
-#TEST
-# Switching this to false will load the fn file and continue from the first NA 
 create_new_ep = TRUE
+# To resume from a previously created chromosome-level table, set create_new_ep
+# to FALSE and define resume_fn. Fresh runs create combinations from input
+# GRanges and do not need a filename.
+resume_fn <- file.path(fn_out, paste0("empP_CAGEenhPermissive_hg19Ens_6.4Mb_", chr, ".txt"))
 
 # Load data
 ## These are pooled by cell/tissue type
@@ -87,21 +85,7 @@ empP_df <- CreateEnhPromCombinationsPerChromosome(fantom5.enh.gr = fantom5.enhan
     "E_active",
     "eff_size"),
   create_new = create_new_ep,
-  filename = file.path(fn_out, fn)
-)
-
-
-empP_df <- CreateEnhPromCombinationsPerChromosome(fantom5.enh.gr = fantom5.enhancers.tpm.gr,
-  TSS.gr = transcripts,
-  promoter.df = promoter_cage_tpm_df,
-  chr = chr,
-  max_distance = max_dist, 
-  metrics_columns = c("empP_median_oneTailed",
-    "empP_median_twoTailed",
-    "E_active",
-    "eff_size"),
-  create_new = create_new_ep,
-  filename = file.path(fn_out, fn)
+  filename = resume_fn
 )
 
 # Log the number of enhancer-promoter pairs tested for this chromosome
