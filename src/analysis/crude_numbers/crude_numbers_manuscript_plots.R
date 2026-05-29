@@ -157,6 +157,12 @@ svg(filename = file.path(outputs, "nested_pie_plot_white_v1.svg"), height = 8, w
 print(plt)
 dev.off()
 
+# Numbers from rings to log
+cat(paste0("Inner ring ", inner_ring$subcat, ": ", inner_ring$value), "\n", file = log_fn, append = TRUE)
+cat(paste0("Middle ring ", middle_ring$subcat, ": ", middle_ring$value), "\n", file = log_fn, append = TRUE)
+
+cat(paste0("Outer ring ", outer_ring$subcat, ": ", outer_ring$value), "\n", file = log_fn, append = TRUE)  
+
 # Ratios to Log
 cat(paste0("Ratio of loci that fall in GRBs ", basic_results["Loci_in_GRB"]/(basic_results["Loci_in_GRB"]+basic_results["Loci_out_GRB"])), "\n", file = log_fn, append = TRUE)
 # ratio of loci that fall in GRBs and overlap enhancers
