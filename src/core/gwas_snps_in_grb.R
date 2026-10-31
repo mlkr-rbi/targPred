@@ -2,9 +2,7 @@
 library(tidyverse)
 library(GenomicRanges)
 library(rtracklayer)
-library(biomaRt)
-library(httr)
-library(jsonlite)
+library(DBI)
 
 core_dir <- "src/core" 
 
@@ -31,7 +29,7 @@ grbs <- readRDS(file.path(data_dir, "processed", "GRBs_with_targets.gr.rds"))
 efo_mappings <- read.csv(file.path(data_dir, "inputs", paste0("GWAS_",gwas_year), "gwas-efo-trait-mappings.tsv"), sep = "\t", header = TRUE)
 
 ## GWAS association file
-gwas_path <- file.path("data/processed", "gwas_associations_2026.csv")
+gwas_path <- file.path(data_dir, "processed", paste0("gwas_associations_", gwas_year, ".csv"))
 
 
 ### Script outputs ###
@@ -51,8 +49,8 @@ loci_in_GRBs_df_fn <- file.path(data_dir, "processed","loci_in_GRBs.df.csv")
 ## Granges object with SNPs in GRBs for further analyses
  snps_in_GRBs_gr_fn <- file.path(data_dir, "processed","snps_in_GRBs.gr.rds")
 
-## Mart result for SNPs in GWAS
-mart_result_fn <- file.path(data_dir,"inputs", "GWAS_SNPs_mart_result.csv")
+## Local GRCh37 lookup from the 1000 Genomes reference used for LD
+snp_coordinates_fn <- file.path(data_dir, "inputs", "1000genomes_phase3_grch37", "gwas_coordinates.tsv")
 
 # Web table with all the information for the web app
 web_table_fn <- file.path(data_dir,"outputs", "web_table.csv")
@@ -70,6 +68,40 @@ cat("Dimensions of gwas_associations after EUR filtering:", dim(gwas_association
 
 gwas_snps_LDblocks <- read.csv(file.path(LDblock_path),sep="\t",header=FALSE)
 colnames(gwas_snps_LDblocks) <- c("chromosome","min_loc","max_loc","SNPS")
+
+# Validate the local lookup before writing any workflow outputs. Positions are
+# 1-based GRCh37, matching the reference underlying the existing LD blocks.
+snp_coordinates <- read.delim(snp_coordinates_fn, colClasses = "character")
+required_columns <- c("refsnp_id", "chr_name", "chrom_start")
+if (!all(required_columns %in% names(snp_coordinates))) {
+    stop("Coordinate lookup must contain refsnp_id, chr_name, and chrom_start.")
+}
+snp_coordinates <- unique(snp_coordinates[, required_columns])
+snp_coordinates$chrom_start <- suppressWarnings(as.numeric(snp_coordinates$chrom_start))
+primary_chromosomes <- c(as.character(seq_len(22)), "X")
+if (anyNA(snp_coordinates) || any(!nzchar(snp_coordinates$refsnp_id)) ||
+    any(!snp_coordinates$chr_name %in% primary_chromosomes) ||
+    any(!is.finite(snp_coordinates$chrom_start)) ||
+    any(snp_coordinates$chrom_start < 1 | snp_coordinates$chrom_start != floor(snp_coordinates$chrom_start))) {
+    stop("Coordinate lookup contains invalid IDs, chromosomes, or positions.")
+}
+if (anyDuplicated(snp_coordinates$refsnp_id)) {
+    stop("Multiple positions found for the same SNP in the coordinate lookup.")
+}
+lead_match <- match(gwas_snps_LDblocks$SNPS, snp_coordinates$refsnp_id)
+if (anyNA(lead_match)) {
+    missing_ids <- unique(gwas_snps_LDblocks$SNPS[is.na(lead_match)])
+    stop(sprintf("Coordinate lookup is missing %d LD lead SNPs; examples: %s",
+                 length(missing_ids), paste(head(missing_ids), collapse = ", ")))
+}
+lead_chromosomes <- sub("^chr", "", gwas_snps_LDblocks$chromosome)
+lead_chromosomes[lead_chromosomes == "23"] <- "X"
+if (any(lead_chromosomes != snp_coordinates$chr_name[lead_match])) {
+    stop("SNP coordinate chromosomes disagree with the LD-block chromosomes.")
+}
+cat("Coordinate source:", snp_coordinates_fn, "\n",
+    "LD lead SNPs with validated coordinates:", length(unique(gwas_snps_LDblocks$SNPS)),
+    "\n", file = log_fn, append = TRUE)
 gwas_snps_LDblocks <-
   gwas_snps_LDblocks %>%
   # Creating a column for LDblock that can be easily converted to gr 
@@ -179,87 +211,8 @@ cat("Number of unique SNPs in GWAS:", length(unique(gwas$SNPS)), "\n", file = lo
 #LOG: number of unique SNPs in GRBs
 cat("Number of unique SNPs in GRBs:", length(unique(loci_in_GRBs.df$SNPS)), "\n", file = log_fn, append = TRUE)
 
-# SNPs locations 
-if (file.exists(mart_result_fn)) {
-    mart_result <- read.csv(file = mart_result_fn)
-} else {
-    getBM_retry <- function(...) {
-  for (i in 1:5) {
-    tryCatch({
-      return(getBM(...))
-    }, error = function(e) {
-      message(sprintf("Attempt %d failed: %s", i, e$message))
-      Sys.sleep(10)
-    })
-  }
-  stop("All attempts to query biomaRt failed.")
-  }
-    ensembl <- useMart(biomart = "ENSEMBL_MART_SNP", host = "https://grch37.ensembl.org", dataset="hsapiens_snp")
-    # Split rs_numbers into batches of 5000
-    batch_size <- 5000
-    rs_numbers <- unique(gwas$SNPS)
-    mart_result <- data.frame()
-    for (i in seq(1, length(rs_numbers), by = batch_size)) {
-    message(sprintf("Processing batch %d to %d of %d", i, min(i+batch_size-1, length(rs_numbers)), length(rs_numbers)))
-    batch <- rs_numbers[i:min(i+batch_size-1, length(rs_numbers))]
-    res <- getBM_retry(
-        attributes = c('refsnp_id', 'chr_name', 'chrom_start'),
-        filters = 'snp_filter',
-        values = batch,
-        mart = ensembl
-    )
-    mart_result <- rbind(mart_result, res)
-    # Exclude non-cannonical chromosomes (eg. chrUn, chrM, chrX_random, etc.)
-    mart_result <- mart_result %>%
-    filter(!str_detect(chr_name, pattern = "^H"))
-
-    # Save the mart_result to a csv file for future use
-    write.csv(mart_result, file = mart_result_fn, row.names = FALSE)
-    }
-    
-    # Check which SNPs in gwas$SNPS are not present in mart_result - those are likely archived SNPs that are not in dbSNP anymore, or SNPs that do not have a position in the database
-    missing_snps <- setdiff(gwas$SNPS, mart_result$refsnp_id)
-
-    # Use httr and jsonlite to query dbSNP REST API for the missing SNPs to get their positions
-    if (length(missing_snps) > 0) {
-        message(sprintf("Querying dbSNP REST API for %d missing SNPs", length(missing_snps)))
-        missing_snps_df <- data.frame(refsnp_id = missing_snps, cannonical_id = NA, chr_name = NA, chrom_start = NA)
-        for (i in 1:nrow(missing_snps_df)) {
-            # print progress every 10 SNPs
-            if (i %% 10 == 0) {
-                message(sprintf("Processing missing SNP %d of %d", i, nrow(missing_snps_df)))
-            }
-            snp_id <- missing_snps_df$refsnp_id[i]
-            url <- paste0("https://rest.ensembl.org/variant_recoder/human/", snp_id, "?content-type=application/json")
-            response <- httr::GET(url)
-            data <- fromJSON(rawToChar(response$content))
-            # Get the cannonical id
-            missing_snps_df$cannonical_id[i] <- unlist(data)["TT.id"]
-        }
-
-        # save missing_snps_df to a csv file for future use
-        write.csv(missing_snps_df, file = file.path(data_dir,"processed", "missing_snps_df.csv"), row.names = FALSE)
-        # For the cannonical ids, query biomaRt again to get their positions
-        res <- getBM(
-            attributes = c('refsnp_id', 'chr_name', 'chrom_start'),
-            filters = 'snp_filter',
-            values = missing_snps_df$cannonical_id,
-            mart = ensembl
-        )
-        # Combine the results with the original mart_result
-        mart_result <- rbind(mart_result, res)
-        write.csv(mart_result, file = mart_result_fn, row.names = FALSE)
-
-    }
-}
-
-#LOG: how many of the SNPs in gwas$SNPS and loci_in_GRBs.df$SNPS are not present in mart_result
-cat("Number of SNPs in gwas$SNPS that are not present in mart_result:", length(setdiff(gwas$SNPS, mart_result$refsnp_id)), "\n", file = log_fn, append = TRUE)
-cat("Number of SNPs in loci_in_GRBs.df$SNPS that are not present in mart_result:", length(setdiff(loci_in_GRBs.df$SNPS, mart_result$refsnp_id)), "\n", file = log_fn, append = TRUE)
-
-
 # Extracting SNPs that are in GRBs and creating a GRanges object for them
-snps_in_GRBs.gr <- filter(mart_result, refsnp_id %in%      loci_in_GRBs.df$SNPS) %>%
+snps_in_GRBs.gr <- filter(snp_coordinates, refsnp_id %in%      loci_in_GRBs.df$SNPS) %>%
 # Rename columns
     dplyr::select(SNPS = refsnp_id, CHR = chr_name, POS = chrom_start) %>%
     # Creating a GRanges object
@@ -296,9 +249,13 @@ web_table <- web_table %>%
     # If the SNP is in a GRB but has no known targets, set GR_targets to "unknown"
     mutate(GRB_targets = if_else((GRB_targets == "NA" & inGRB == TRUE), "unknown", GRB_targets))
 
-# Add SNP positions to the web table by joining with mart_result
+# Add SNP positions to the web table by joining with snp_coordinates
 web_table <- web_table %>%
-    left_join( dplyr::select(mart_result, refsnp_id, chrom_start), by = c("SNP" = "refsnp_id")) 
+    mutate(Chromosome = str_remove(str_extract(Locus_position, "^[^:]+"), "^chr")) %>%
+    left_join(
+        dplyr::select(snp_coordinates, refsnp_id, chr_name, chrom_start),
+        by = c("SNP" = "refsnp_id", "Chromosome" = "chr_name")
+    )
 
 web_table <- web_table %>%
 # Rename chrom_start to SNP_position and reorder columns using select

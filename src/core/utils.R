@@ -827,8 +827,8 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
     if(length(current_GRB) != 1){
         current_GRB <- current_GRB[start(current_GRB) == GRB_start]
     }
-    # matching starts 
-    if(start(current_GRB) != as.numeric(GRB_start)){
+    # matching starts (no GRB left when the loci only overlap neighbouring GRBs)
+    if(length(current_GRB) != 1 || start(current_GRB) != as.numeric(GRB_start)){
         print("Start coordinates of GRBs do not match")
         return(message("Whoops, the current_GRB does not match byGRBlist"))
     }
@@ -1081,7 +1081,7 @@ locusGviz <- function(i, dir, labels=T, byGRB_list,
 
 
     
-    png(filename=paste0(dir, str_replace_all(names(byGRB_list)[i], ":", "_"), "_Gviz.png"), 
+    png(filename=paste0(dir, str_replace_all(names(byGRB_list)[i], ":", "_"), output_suffix), 
         width=wid, height=hei)
     plotTracks(list(itrack, 
                     Gtrack,

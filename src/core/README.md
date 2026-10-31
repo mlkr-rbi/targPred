@@ -20,6 +20,7 @@ The scripts with scheduler directives are to be used in a job scheduling HPC clu
 | `promoter_cage_tpm_df_fixed_pooled.rds` | RDS / data frame | Promoter CAGE expression matrix. | `data/inputs/` |
 | `empP_CAGEenhPermissive_hg19Ens_6.4Mb_chr*.txt` | Text files | Chromosome-level empP files produced by the prerequisite empP workflow. | `data/processed/<empP_dir>/` |
 | PLINK / 1000 Genomes files | PLINK files | Reference genotype data used to calculate LD blocks. `run_PLINK.sh` can download and prepare these files. | `data/plink_dir/` |
+| `gwas_coordinates.tsv` | TSV | Local 1000 Genomes Phase 3 GRCh37 SNP coordinates covering every LD lead ID. | `data/inputs/1000genomes_phase3_grch37/` |
 
 ## Outputs
 
@@ -34,8 +35,6 @@ The scripts with scheduler directives are to be used in a job scheduling HPC clu
 | `loci_in_GRBs.bed` | BED | GWAS loci overlapping GRBs for genome-browser visualization. | `data/outputs/` |
 | `loci_in_GRBs.df.csv` | CSV | Data frame of loci in GRBs for downstream analyses. | `data/processed/` |
 | `snps_in_GRBs.gr.rds` | RDS / GRanges | GRanges object containing SNPs that fall in GRBs. | `data/processed/` |
-| `GWAS_SNPs_mart_result.csv` | CSV | SNP position lookup from biomaRt/dbSNP, created or updated if needed. | `data/inputs/` |
-| `missing_snps_df.csv` | CSV | Optional table of missing/archived SNP identifiers queried through REST APIs. | `data/processed/` |
 | `web_table.csv` | CSV | Main table prepared for downstream/web use. | `data/outputs/` |
 | `targpred<year>.db` | SQLite database | SQLite database with `grb_table` and `loci_table`. | `data/outputs/` |
 | `<byGRB_name>` | RDS / list | by-GRB list containing genes in each GRB and enhancer-promoter information. | `data/processed/` |
@@ -160,12 +159,15 @@ Script outputs:
 
 Log file: `data/processed/logs/gwas_snps_in_grb.txt`
 
+SNP positions come from the local 1000 Genomes Phase 3 GRCh37 lookup at `data/inputs/1000genomes_phase3_grch37/gwas_coordinates.tsv` (columns `refsnp_id`, `chr_name`, `chrom_start`; 1-based positions). Include every lead ID from the LD-block BED when preparing this lookup, even IDs absent from the current GWAS SNP list. Before writing results, the script checks that each LD lead has one valid position on the expected primary chromosome (1–22 or X). Missing IDs, conflicting positions, or chromosome disagreements stop processing. The web table takes its chromosome from the LD locus and joins positions by both rsID and chromosome. No BioMart query or liftover is required.
+
 Script inputs:
 
 - `data/processed/GRBs_with_targets.gr.rds`
 - `data/processed/gwas_associations_<year>.csv`
 - `data/inputs/GWAS_<year>/gwas-efo-trait-mappings.tsv`
 - `data/processed/EUR_LD_blocks_allChr.bed`
+- `data/inputs/1000genomes_phase3_grch37/gwas_coordinates.tsv`
 
 Script outputs:
 
@@ -173,7 +175,6 @@ Script outputs:
 - `data/outputs/loci_in_GRBs.bed`
 - `data/processed/loci_in_GRBs.df.csv`
 - `data/processed/snps_in_GRBs.gr.rds`
-- `data/inputs/GWAS_SNPs_mart_result.csv`
 - `data/outputs/web_table.csv`
 - `data/outputs/targpred<year>.db`
 
@@ -219,3 +220,14 @@ Script inputs:
 Script outputs:
 
 - Gviz plots under `data/plots/gviz_plots/`
+- `data/plots/gviz_plots/gviz_status.tsv`: one row per trait/GRB panel with status `written`, `skipped` (the plotting helper found no usable loci or enhancers) or `error` and the error message
+- `data/cache/gviz/`: GRCh37 Mart connection, gene tracks per GRB region, ideograms and hg19 cytobands (`hg19_cytoBandIdeo.txt.gz`, downloaded from UCSC on first use)
+
+The script runs traits in parallel with `SLURM_CPUS_PER_TASK` cores (one if unset) and stops with an error after writing the status file if any panel failed. Network access and caching are handled by `gviz_cache.R`:
+
+- Gene tracks come from the GRCh37 Ensembl archive (`grch37.ensembl.org`). The connection is only opened on a cache miss, so a run with a populated `data/cache/gviz/` does not contact Ensembl or UCSC for track construction. Keep the cache with the data; do not reuse it for a different assembly or gene-annotation release.
+- Gviz queries Ensembl again while drawing whenever a panel extends beyond the cached gene track, which is the case for most panels. Panels failing with transient Ensembl errors (HTTP 5xx/405, timeouts, connection failures) are retried up to five times with waits of 1, 2, 4 and 8 minutes. Other errors are not retried.
+- Each worker uses its own biomaRt query cache under the local temporary directory. The default `~/.cache/biomaRt` serialises parallel workers on its sqlite lock when the home directory is on a network file system.
+- biomaRt's hard-coded 10-second request timeout is raised to 180 seconds.
+
+Package versions: Gviz 1.42.1 requires knitr >= 1.43 at load time, and the `collect(Inf)` call in BiocFileCache 2.6.1 (used by biomaRt 2.54.1) fails with dbplyr 2.5.0 but works with dbplyr 2.3.4. The shared `targPred` conda environment has knitr 1.40 and dbplyr 2.5.0, so install knitr 1.46 and dbplyr 2.3.4 into a separate library and point `R_LIBS_USER` to it (as in `runs/coordinate_refresh_20261027/R-library`).

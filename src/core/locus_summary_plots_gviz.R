@@ -13,6 +13,8 @@ library(parallel)
 
 # Manually set the path to utils.R
 source(file.path("src/core", "utils.R"))
+# Cached gene/ideogram tracks and Ensembl retry helpers
+source(file.path("src/core", "gviz_cache.R"))
 
 directory_type <- ""
 paths <- set_paths("src/core/paths.txt")
@@ -81,27 +83,12 @@ loci_in_GRBs.gr$name <- loci_in_GRBs.gr$SNPS # need to have a $name column for g
 
 
 
-# preparing mart to extract gene objects from
-# mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL", host="https://feb2014.archive.ensembl.org")
-# THIS IS HG38 so do NOT use it
-# mart <- useMart(dataset="hsapiens_gene_ensembl", biomart="ENSEMBL_MART_ENSEMBL")
+# Gene tracks come from the GRCh37 Ensembl archive (do NOT use the default, hg38, mart).
+# The Mart connection, gene tracks and ideograms are cached under data/cache/gviz;
+# the connection is only opened on a cache miss (see gviz_cache.R).
+options(targpred.gviz_cache_dir = file.path(data_dir, "cache", "gviz"))
+extend_biomart_timeout(180)
 mart <- NULL
-for (attempt in 1:5) {
-  tryCatch({
-    mart <- useEnsembl(
-      biomart = "genes",
-      dataset = "hsapiens_gene_ensembl",
-      host = "https://grch37.ensembl.org"
-    )
-    break
-  }, error = function(e) {
-    message("Attempt ", attempt, " failed: ", conditionMessage(e))
-  })
-}
-
-if (is.null(mart)) {
-  stop("Failed to connect to Ensembl after 5 attempts")
-}
 
 
 # Looping through traits and plotting Gviz for each trait separately, including only loci with the trait and SNPs with the trait
@@ -109,39 +96,75 @@ traits <- unique(loci_in_GRBs.df$MAPPED_TRAIT) %>% sort()
 
 num_cores <- as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = 1))
 
-mclapply(traits, function(trait) {
+# Each trait returns one status row per GRB panel: written, skipped (the helper
+# found no usable loci/enhancers) or error.
+status_list <- mclapply(traits, function(trait) {
+    use_local_biomart_cache()
     trait_dir <- file.path(gviz_dir,str_replace_all(trait," |/","_"))
     # Creates a dir if it does not exist
     if(!file.exists(trait_dir)){dir.create(trait_dir)}
- 
+
     # to be done on each locus
     message(trait)
     # Including only loci in trait
     loci_in_GRB_trait <- loci_in_GRBs.gr[loci_in_GRBs.gr$MAPPED_TRAIT == trait,]
     # Remoivng duplicated SNPS per trait/locus
     loci_in_GRB_trait <- loci_in_GRB_trait[!duplicated(loci_in_GRB_trait$SNPS),]
-    
+
     grbs_to_loop <-
         which( names(byGRB_list) %in% str_replace_all(loci_in_GRB_trait$grb.coords, pattern = ":|-", replacement = "_"))
-    
+
+    status <- data.frame(trait=character(), grb=character(), status=character(), detail=character())
     #for (i in (1:length(byGRB_list))) {
     for (i in grbs_to_loop) {
         print(paste("Plotting Gviz for", names(byGRB_list)[i], sep=" "))
-        tryCatch(locusGviz(i, 
-                           dir=paste0(trait_dir,"/",str_replace_all(trait," |/","_"),"_"),
-                           labels=T, 
-                           byGRB_list=byGRB_list, 
-                           # Selecting only loci with the trait
-                           loci.gr= loci_in_GRB_trait, 
-                           # Selecting only SNPs with the trait
-                           snps.gr=snps_in_GRBs.gr[snps_in_GRBs.gr$SNPS %in% loci_in_GRB_trait$SNPS,],
-                           grbs=grbs, 
-                           mart=mart,
-                           trait = trait,
-                           cne_density_file = cne_density_file,
-                           directionality_file = directionality_file,
-                           output_suffix = gviz_output_suffix),
-                 error=function(e){cat("ERROR :",conditionMessage(e), "\n", trait, i)})
+        plot_dir <- paste0(trait_dir,"/",str_replace_all(trait," |/","_"),"_")
+        output <- paste0(plot_dir, str_replace_all(names(byGRB_list)[i], ":", "_"), gviz_output_suffix)
+        previous_mtime <- file.mtime(output)
+        detail <- ""
+        outcome <- tryCatch({
+            with_retry(function() tryCatch(
+                locusGviz(i,
+                          dir=plot_dir,
+                          labels=T,
+                          byGRB_list=byGRB_list,
+                          # Selecting only loci with the trait
+                          loci.gr= loci_in_GRB_trait,
+                          # Selecting only SNPs with the trait
+                          snps.gr=snps_in_GRBs.gr[snps_in_GRBs.gr$SNPS %in% loci_in_GRB_trait$SNPS,],
+                          grbs=grbs,
+                          mart=mart,
+                          trait = trait,
+                          cne_density_file = cne_density_file,
+                          directionality_file = directionality_file,
+                          output_suffix = gviz_output_suffix),
+                error=function(e) { while (length(dev.list())) dev.off(); stop(e) }))
+            # A PNG left untouched from an earlier run does not count as written
+            rewritten <- file.exists(output) && (is.na(previous_mtime) || file.mtime(output) != previous_mtime)
+            if (rewritten && file.size(output) > 1000) "written" else "skipped"
+        }, error=function(e) {
+            detail <<- conditionMessage(e)
+            cat("ERROR :", detail, "\n", trait, i, "\n")
+            "error"
+        })
+        status <- rbind(status, data.frame(trait=trait, grb=names(byGRB_list)[i],
+                                           status=outcome, detail=detail))
     }
+    status
+}, mc.cores = num_cores)
+
+# A worker that died entirely returns a try-error (or NULL if it was killed)
+# instead of a data frame
+worker_failed <- vapply(status_list, function(x) is.null(x) || inherits(x, "try-error"), logical(1))
+failed_traits <- traits[worker_failed]
+status_df <- bind_rows(status_list[!worker_failed])
+n_failed <- length(failed_traits)
+status_df <- bind_rows(status_df, data.frame(trait=failed_traits, grb=rep(NA_character_, n_failed),
+                                             status=rep("error", n_failed),
+                                             detail=rep("worker failed", n_failed)))
+status_file <- file.path(gviz_dir, "gviz_status.tsv")
+write.table(status_df, status_file, sep="\t", quote=TRUE, row.names=FALSE)
+print(table(status_df$status))
+if (any(status_df$status == "error")) {
+    stop(sum(status_df$status == "error"), " Gviz panels failed; see ", status_file)
 }
-)
