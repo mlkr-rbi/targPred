@@ -149,15 +149,39 @@ efo_mappings_sub <- efo_mappings %>%
     dplyr::select(EFO.term, EFO.URI) %>%
     unique()
 
+# Some association URIs are missing from the EFO mappings file. These take their
+# name from the association itself, where comma-separated names follow the URI
+# order. A name differing only by case from a mapped term is the same trait.
+unmapped_traits <- gwas_associations %>%
+    distinct(MAPPED_TRAIT, MAPPED_TRAIT_URI) %>%
+    mutate(name = str_split(MAPPED_TRAIT, ", *"), uri = str_split(MAPPED_TRAIT_URI, ", *")) %>%
+    filter(lengths(name) == lengths(uri)) %>%
+    dplyr::select(name, uri) %>%
+    tidyr::unnest(c(name, uri)) %>%
+    filter(!is.na(uri), nzchar(uri), !uri %in% efo_mappings_sub$EFO.URI) %>%
+    mutate(name = coalesce(efo_mappings_sub$EFO.term[match(tolower(name), tolower(efo_mappings_sub$EFO.term))], name)) %>%
+    distinct()
+if (anyDuplicated(unmapped_traits$uri)) {
+    stop("Trait URIs with more than one name: ",
+         paste(unique(unmapped_traits$uri[duplicated(unmapped_traits$uri)]), collapse = ", "))
+}
+
 # Separate GWAS rows by trait using EFO mappings
 gwas <- gwas %>%
     tidyr::separate_rows(MAPPED_TRAIT_URI, sep=",") %>%
     mutate(MAPPED_TRAIT_URI = str_trim(MAPPED_TRAIT_URI)) %>%
     left_join(efo_mappings_sub, by = c("MAPPED_TRAIT_URI" = "EFO.URI")) %>%
+    left_join(unmapped_traits, by = c("MAPPED_TRAIT_URI" = "uri")) %>%
     dplyr::select(-MAPPED_TRAIT) %>%
-    dplyr::select(everything(), MAPPED_TRAIT = EFO.term) %>%
+    mutate(MAPPED_TRAIT = coalesce(EFO.term, name)) %>%
+    dplyr::select(-EFO.term, -name) %>%
     # Add MAPPED_TRAIT_ID column by extracting the last part of the MAPPED_TRAIT_URI after the last "/"
     mutate(MAPPED_TRAIT_ID = str_extract(MAPPED_TRAIT_URI, "[^/]+$"))
+
+unnamed_uris <- setdiff(gwas$MAPPED_TRAIT_URI[is.na(gwas$MAPPED_TRAIT)], c(NA, ""))
+if (length(unnamed_uris) > 0) {
+    stop("Trait URIs without a name: ", paste(unnamed_uris, collapse = ", "))
+}
 
 
 # Cat the dimensions of gwas after joining with LD blocks and separating traits
@@ -261,6 +285,9 @@ web_table <- web_table %>%
 # Rename chrom_start to SNP_position and reorder columns using select
     dplyr::select("Chromosome","SNP","Locus_position", SNP_position = "chrom_start","P_value","Mapped_trait","Study_accession","GRB_position","GRB_targets","GWAS_genes","inGRB")
 
+
+# Traits merged by name can repeat a row once the trait ID is no longer present
+web_table <- distinct(web_table)
 
 write.csv(web_table, file = web_table_fn, row.names = FALSE)
 
